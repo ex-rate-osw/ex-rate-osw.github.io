@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>환율 기록</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d23; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --up: #dc2626; --down: #2563eb; --grid: rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --card: #1a1d24; --text: #e8eaed; --muted: #9aa0a6; --line: #2a2e37;
+      --accent: #60a5fa; --up: #f87171; --down: #60a5fa; --grid: rgba(255,255,255,.07);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; }
+  .updated { color: var(--muted); font-size: 13px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    cursor: pointer; text-align: left; color: inherit; font: inherit;
+  }
+  .card[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .card .name { font-size: 13px; color: var(--muted); }
+  .card .value { font-size: 24px; font-weight: 700; margin: 4px 0 2px; }
+  .card .diff { font-size: 13px; }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .panel-head h2 { font-size: 16px; margin: 0; }
+  .tabs { display: inline-flex; background: var(--bg); border-radius: 8px; padding: 3px; }
+  .tabs button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .tabs button[aria-pressed="true"] { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .chart-wrap { position: relative; height: 320px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 9px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .table-scroll { overflow-x: auto; }
+
+  .empty { color: var(--muted); text-align: center; padding: 48px 0; }
+  footer { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  footer a { color: inherit; }
+
+  @media (max-width: 600px) {
+    .cards { grid-template-columns: 1fr; }
+    .card .value { font-size: 20px; }
+    .chart-wrap { height: 260px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>환율 기록</h1>
+    <span class="updated" id="updated">불러오는 중…</span>
+  </header>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2 id="chartTitle">추이</h2>
+      <div class="tabs" id="rangeTabs">
+        <button data-range="today">오늘</button>
+        <button data-range="7d" aria-pressed="true">7일</button>
+        <button data-range="30d">30일</button>
+        <button data-range="all">전체</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <div class="empty" id="empty" hidden>아직 수집된 데이터가 없어요.<br>Actions가 처음 실행되면 여기에 표시됩니다.</div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 id="tableTitle">일자별</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>날짜</th><th>시가</th><th>고가</th><th>저가</th><th>종가</th><th>평균</th><th>기록</th></tr></thead>
+        <tbody id="dailyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>시장 환율 기준 · 은행 고시환율과 차이가 있을 수 있어요</span>
+    <span><a href="data/rates.csv" download>CSV 받기</a> · 데이터: Twelve Data / <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a></span>
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script>
+const CUR = {
+  usd:    { name: '미국 달러', unit: 'USD 1' },
+  jpy100: { name: '일본 엔',   unit: 'JPY 100' },
+  eur:    { name: '유로',      unit: 'EUR 1' },
+};
+const state = { cur: 'usd', range: '7d' };
+let rows = [];
+let chart = null;
+
+const fmt = n => n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const toDate = ts => new Date(ts.replace(' ', 'T') + ':00+09:00'); // 기록은 항상 KST
+
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const head = (lines.shift() || '').split(',');
+  return lines.map(line => {
+    const v = line.split(',');
+    const o = Object.fromEntries(head.map((h, i) => [h, v[i]]));
+    return {
+      ts: o.timestamp_kst, date: (o.timestamp_kst || '').slice(0, 10),
+      usd: +o.usd, jpy100: +o.jpy100, eur: +o.eur, source: o.source,
+    };
+  }).filter(r => r.ts && Number.isFinite(r.usd)).sort((a, b) => a.ts.localeCompare(b.ts));
+}
+
+function rangeRows() {
+  if (!rows.length) return [];
+  const last = rows[rows.length - 1];
+  if (state.range === 'today') return rows.filter(r => r.date === last.date);
+  if (state.range === 'all') return rows;
+  const days = state.range === '7d' ? 7 : 30;
+  const cutoff = toDate(last.ts).getTime() - days * 86400000; // 마지막 기록 기준 (주말에도 비지 않게)
+  return rows.filter(r => toDate(r.ts).getTime() >= cutoff);
+}
+
+function prevClose(key) {
+  const last = rows[rows.length - 1];
+  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].date !== last.date) return rows[i][key];
+  return null;
+}
+
+function renderCards() {
+  const el = document.getElementById('cards');
+  const last = rows[rows.length - 1];
+  el.innerHTML = Object.entries(CUR).map(([key, c]) => {
+    const now = last ? last[key] : null;
+    const prev = last ? prevClose(key) : null;
+    let diff = '<span class="flat">전일 데이터 없음</span>';
+    if (now != null && prev != null) {
+      const d = now - prev, pct = d / prev * 100;
+      const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+      const sign = d > 0 ? '▲' : d < 0 ? '▼' : '–';
+      diff = `<span class="${cls}">${sign} ${fmt(Math.abs(d))} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)</span> <span class="flat">전일 대비</span>`;
+    }
+    return `<button class="card" data-cur="${key}" aria-pressed="${state.cur === key}">
+      <div class="name">${c.name} · ${c.unit}</div>
+      <div class="value">${now != null ? fmt(now) + '원' : '–'}</div>
+      <div class="diff">${now != null ? diff : ''}</div>
+    </button>`;
+  }).join('');
+  el.querySelectorAll('.card').forEach(b => b.onclick = () => { state.cur = b.dataset.cur; render(); });
+}
+
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function renderChart() {
+  const data = rangeRows();
+  const c = CUR[state.cur];
+  document.getElementById('chartTitle').textContent = `${c.name} 추이 (${c.unit})`;
+  const empty = !data.length;
+  document.getElementById('empty').hidden = !empty;
+  document.querySelector('.chart-wrap').hidden = empty;
+  if (empty) return;
+
+  const labels = data.map(r => state.range === 'today'
+    ? r.ts.slice(11, 16)
+    : `${r.ts.slice(5, 7)}/${r.ts.slice(8, 10)} ${r.ts.slice(11, 13)}시`);
+  const values = data.map(r => r[state.cur]);
+  const accent = cssVar('--accent'), muted = cssVar('--muted'), grid = cssVar('--grid');
+
+  const config = {
+    type: 'line',
+    data: { labels, datasets: [{
+      data: values, borderColor: accent, backgroundColor: accent + '22', fill: true,
+      borderWidth: 2, tension: 0.25, pointRadius: data.length > 48 ? 0 : 2, pointHoverRadius: 4,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.parsed.y)}원` } },
+      },
+      scales: {
+        x: { ticks: { color: muted, maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } },
+        y: { ticks: { color: muted, callback: v => fmt(v) }, grid: { color: grid } },
+      },
+    },
+  };
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), config);
+}
+
+function renderTable() {
+  const key = state.cur;
+  document.getElementById('tableTitle').textContent = `일자별 · ${CUR[key].name}`;
+  const byDate = new Map();
+  for (const r of rangeRows()) {
+    if (!byDate.has(r.date)) byDate.set(r.date, []);
+    byDate.get(r.date).push(r[key]);
+  }
+  const body = document.getElementById('dailyBody');
+  if (!byDate.size) { body.innerHTML = '<tr><td colspan="7" class="flat">데이터 없음</td></tr>'; return; }
+  body.innerHTML = [...byDate.entries()].reverse().map(([date, v]) => {
+    const avg = v.reduce((a, b) => a + b, 0) / v.length;
+    const dow = '일월화수목금토'[toDate(date + ' 12:00').getDay()];
+    return `<tr><td>${date} (${dow})</td><td>${fmt(v[0])}</td><td>${fmt(Math.max(...v))}</td>
+      <td>${fmt(Math.min(...v))}</td><td>${fmt(v[v.length - 1])}</td><td>${fmt(avg)}</td><td>${v.length}</td></tr>`;
+  }).join('');
+}
+
+function render() {
+  document.querySelectorAll('#rangeTabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.range === state.range));
+  renderCards();
+  renderChart();
+  renderTable();
+}
+
+document.querySelectorAll('#rangeTabs button').forEach(b => b.onclick = () => { state.range = b.dataset.range; render(); });
+
+fetch('data/rates.csv?t=' + Date.now())
+  .then(res => { if (!res.ok) throw new Error(res.status); return res.text(); })
+  .then(text => {
+    rows = parseCsv(text);
+    const last = rows[rows.length - 1];
+    document.getElementById('updated').textContent = last ? `마지막 기록 ${last.ts} (KST)` : '기록 없음';
+    render();
+  })
+  .catch(err => {
+    document.getElementById('updated').textContent = '데이터를 불러오지 못했어요';
+    console.error(err);
+  });
+</script>
+</body>
+</html>
