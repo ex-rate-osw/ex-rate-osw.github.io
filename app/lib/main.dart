@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'models.dart';
@@ -35,9 +37,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  /// 앱이 화면에 떠 있는 동안 자동으로 다시 받아오는 간격
+  static const _autoRefreshInterval = Duration(minutes: 10);
+
   List<RateRecord> _rows = const [];
-  bool _loading = true;
+  bool _loading = true; // 첫 로딩
+  bool _refreshing = false; // 받아오는 중 (중복 요청 방지)
   String? _error;
+  DateTime? _checkedAt;
+  Timer? _timer;
   Currency _currency = Currency.usd;
   RateRange _range = RateRange.week;
 
@@ -50,33 +58,64 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // 앱으로 다시 돌아올 때마다 최신 데이터로 갱신
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _load();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _load(); // 앱으로 돌아오면 바로 갱신 (타이머도 새로 시작)
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _timer?.cancel(); // 백그라운드에서는 받아오지 않음
+      case AppLifecycleState.inactive:
+        break;
+    }
   }
 
+  /// 새로고침 버튼, 당겨서 새로고침, 앱 복귀, 자동 타이머가 모두 이 함수를 쓴다.
+  /// 끝나면 타이머를 처음부터 다시 10분으로 건다.
   Future<void> _load() async {
-    setState(() => _error = null);
+    if (_refreshing) return;
+    _timer?.cancel();
+    if (mounted) setState(() => _refreshing = true);
     try {
       final rows = await fetchRates();
       if (!mounted) return;
       setState(() {
         _rows = rows;
-        _loading = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = '데이터를 불러오지 못했어요 ($e)';
-        _loading = false;
-      });
+      setState(() => _error = '데이터를 불러오지 못했어요 ($e)');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _refreshing = false;
+          _loading = false;
+          _checkedAt = DateTime.now();
+        });
+        _scheduleNext();
+      }
     }
   }
+
+  void _scheduleNext() {
+    _timer?.cancel();
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state != null && state != AppLifecycleState.resumed && state != AppLifecycleState.inactive) {
+      return; // 백그라운드면 걸지 않음, 돌아올 때 resumed에서 다시 받음
+    }
+    _timer = Timer(_autoRefreshInterval, _load);
+  }
+
+  String _hhmm(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -90,8 +129,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         actions: [
           IconButton(
             tooltip: '새로고침',
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
+            onPressed: _refreshing ? null : _load,
+            icon: _refreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -115,6 +160,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     last == null ? '기록 없음' : '마지막 기록 ${last.ts} (KST)',
                     style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
+                  if (_checkedAt != null)
+                    Text(
+                      '${_hhmm(_checkedAt!)} 확인 · 다음 자동 갱신 ${_hhmm(_checkedAt!.add(_autoRefreshInterval))}',
+                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    ),
                   const SizedBox(height: 8),
                   for (final c in Currency.values)
                     _CurrencyCard(
