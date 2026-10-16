@@ -116,6 +116,7 @@ let rows = [];
 let chart = null;
 
 const fmt = n => n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const slotHour = r => `${+r.slot.slice(11, 13)}시`;
 const toDate = ts => new Date(ts.replace(' ', 'T') + ':00+09:00'); // 기록은 항상 KST
 
 function parseCsv(text) {
@@ -125,10 +126,13 @@ function parseCsv(text) {
     const v = line.split(',');
     const o = Object.fromEntries(head.map((h, i) => [h, v[i]]));
     return {
-      ts: o.timestamp_kst, date: (o.timestamp_kst || '').slice(0, 10),
+      ts: o.timestamp_kst,
+      // 어느 시간대 기록인지 (예전 기록은 수집 시각의 정시로 대체)
+      slot: o.slot_kst || (o.timestamp_kst || '').slice(0, 13) + ':00',
+      date: (o.slot_kst || o.timestamp_kst || '').slice(0, 10),
       usd: +o.usd, jpy100: +o.jpy100, eur: +o.eur, source: o.source,
     };
-  }).filter(r => r.ts && Number.isFinite(r.usd)).sort((a, b) => a.ts.localeCompare(b.ts));
+  }).filter(r => r.ts && Number.isFinite(r.usd)).sort((a, b) => a.slot.localeCompare(b.slot));
 }
 
 function rangeRows() {
@@ -137,8 +141,8 @@ function rangeRows() {
   if (state.range === 'today') return rows.filter(r => r.date === last.date);
   if (state.range === 'all') return rows;
   const days = state.range === '7d' ? 7 : 30;
-  const cutoff = toDate(last.ts).getTime() - days * 86400000; // 마지막 기록 기준 (주말에도 비지 않게)
-  return rows.filter(r => toDate(r.ts).getTime() >= cutoff);
+  const cutoff = toDate(last.slot).getTime() - days * 86400000; // 마지막 기록 기준 (주말에도 비지 않게)
+  return rows.filter(r => toDate(r.slot).getTime() >= cutoff);
 }
 
 function prevClose(key) {
@@ -181,8 +185,8 @@ function renderChart() {
   if (empty) return;
 
   const labels = data.map(r => state.range === 'today'
-    ? r.ts.slice(11, 16)
-    : `${r.ts.slice(5, 7)}/${r.ts.slice(8, 10)} ${r.ts.slice(11, 13)}시`);
+    ? slotHour(r)
+    : `${r.slot.slice(5, 7)}/${r.slot.slice(8, 10)} ${slotHour(r)}`);
   const values = data.map(r => r[state.cur]);
   const accent = cssVar('--accent'), muted = cssVar('--muted'), grid = cssVar('--grid');
 
@@ -197,7 +201,11 @@ function renderChart() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.parsed.y)}원` } },
+        tooltip: { callbacks: {
+          title: items => { const r = data[items[0].dataIndex];
+            return `${r.slot.slice(5, 7)}/${r.slot.slice(8, 10)} ${slotHour(r)} 기록 (${r.ts.slice(11, 16)} 수집)`; },
+          label: ctx => ` ${fmt(ctx.parsed.y)}원`,
+        } },
       },
       scales: {
         x: { ticks: { color: muted, maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } },
@@ -241,7 +249,8 @@ fetch('data/rates.csv?t=' + Date.now())
   .then(text => {
     rows = parseCsv(text);
     const last = rows[rows.length - 1];
-    document.getElementById('updated').textContent = last ? `마지막 기록 ${last.ts} (KST)` : '기록 없음';
+    document.getElementById('updated').textContent = last
+      ? `마지막 기록 ${last.slot.slice(0, 10)} ${slotHour(last)} (${last.ts.slice(11, 16)} 수집, KST)` : '기록 없음';
     render();
   })
   .catch(err => {

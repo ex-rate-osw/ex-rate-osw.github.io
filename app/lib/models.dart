@@ -24,6 +24,7 @@ enum RateRange {
 
 class RateRecord {
   const RateRecord({
+    required this.slot,
     required this.ts,
     required this.usd,
     required this.jpy100,
@@ -31,17 +32,32 @@ class RateRecord {
     required this.source,
   });
 
-  /// 'YYYY-MM-DD HH:MM' (한국시간)
+  /// 어느 시간대 기록인지 'YYYY-MM-DD HH:00' (한국시간)  예) 13시 기록
+  final String slot;
+
+  /// 실제 수집한 시각 'YYYY-MM-DD HH:MM' (한국시간)
   final String ts;
   final double usd;
   final double jpy100;
   final double eur;
   final String source;
 
-  String get date => ts.substring(0, 10);
+  String get date => slot.substring(0, 10);
+
+  /// 시간대 숫자  예) 13
+  int get hour => int.parse(slot.substring(11, 13));
+
+  /// '13시'
+  String get hourLabel => '$hour시';
+
+  /// '10/16 13시'
+  String get slotLabel => '${slot.substring(5, 7)}/${slot.substring(8, 10)} $hourLabel';
+
+  /// 실제 수집 시각 '13:43'
+  String get collectedAt => ts.substring(11, 16);
 
   /// 기록끼리 시간 차이를 계산하는 용도 (모두 KST라 타임존 변환 불필요)
-  DateTime get time => DateTime.parse(ts.replaceFirst(' ', 'T'));
+  DateTime get time => DateTime.parse(slot.replaceFirst(' ', 'T'));
 
   double value(Currency c) => switch (c) {
         Currency.usd => usd,
@@ -89,9 +105,12 @@ List<RateRecord> parseRatesCsv(String text) {
     final jpy = double.tryParse(o['jpy100'] ?? '');
     final eur = double.tryParse(o['eur'] ?? '');
     if (ts.length < 16 || usd == null || jpy == null || eur == null) continue;
-    rows.add(RateRecord(ts: ts, usd: usd, jpy100: jpy, eur: eur, source: o['source'] ?? ''));
+    // 예전 기록(slot_kst 없음)은 수집 시각의 정시로 대체
+    final rawSlot = o['slot_kst'] ?? '';
+    final slot = rawSlot.length >= 16 ? rawSlot : '${ts.substring(0, 13)}:00';
+    rows.add(RateRecord(slot: slot, ts: ts, usd: usd, jpy100: jpy, eur: eur, source: o['source'] ?? ''));
   }
-  rows.sort((a, b) => a.ts.compareTo(b.ts));
+  rows.sort((a, b) => a.slot.compareTo(b.slot));
   return rows;
 }
 

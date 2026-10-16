@@ -18,10 +18,8 @@ class RateChart extends StatelessWidget {
   final RateRange range;
 
   String _label(int i) {
-    final ts = rows[i].ts;
-    return range == RateRange.today
-        ? ts.substring(11, 16)
-        : '${ts.substring(5, 7)}/${ts.substring(8, 10)}';
+    final r = rows[i];
+    return range == RateRange.today ? r.hourLabel : r.slotLabel;
   }
 
   @override
@@ -103,7 +101,7 @@ class RateChart extends StatelessWidget {
               getTooltipItems: (touched) => touched.map((s) {
                 final r = rows[s.x.round().clamp(0, rows.length - 1)];
                 return LineTooltipItem(
-                  '${r.ts.substring(5)}\n${formatNumber(s.y)}원',
+                  '${r.slotLabel} 기록\n${formatNumber(s.y)}원 (${r.collectedAt} 수집)',
                   TextStyle(color: scheme.onInverseSurface, fontSize: 12),
                 );
               }).toList(),

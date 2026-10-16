@@ -1,11 +1,11 @@
 import 'package:ex_rate_app/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _csv = '''timestamp_kst,usd,jpy100,eur,source
-2026-10-14 15:07,1340.00,850.00,1500.00,twelvedata
-2026-10-14 16:07,1341.50,851.00,1502.00,twelvedata
-2026-10-15 09:07,1345.00,852.00,1505.00,twelvedata
-2026-10-15 10:07,1343.00,849.00,1508.00,twelvedata
+const _csv = '''slot_kst,timestamp_kst,usd,jpy100,eur,source
+2026-10-14 15:00,2026-10-14 15:07,1340.00,850.00,1500.00,twelvedata
+2026-10-14 16:00,2026-10-14 16:47,1341.50,851.00,1502.00,twelvedata
+2026-10-15 09:00,2026-10-15 09:13,1345.00,852.00,1505.00,twelvedata
+2026-10-15 10:00,2026-10-15 10:58,1343.00,849.00,1508.00,twelvedata
 ''';
 
 void main() {
@@ -13,8 +13,18 @@ void main() {
 
   test('CSV를 시간순으로 파싱한다', () {
     expect(rows.length, 4);
-    expect(rows.last.ts, '2026-10-15 10:07');
+    expect(rows.last.slot, '2026-10-15 10:00');
+    expect(rows.last.ts, '2026-10-15 10:58');
+    expect(rows.last.hourLabel, '10시');
+    expect(rows.last.slotLabel, '10/15 10시');
+    expect(rows.last.collectedAt, '10:58');
     expect(rows.first.value(Currency.jpy100), 850.0);
+  });
+
+  test('예전 형식(slot_kst 없음)은 수집 시각의 정시로 채운다', () {
+    final old = parseRatesCsv('timestamp_kst,usd,jpy100,eur,source\n2026-10-16 13:43,1348.2,851.9,1511.4,twelvedata\n');
+    expect(old.single.slot, '2026-10-16 13:00');
+    expect(old.single.hourLabel, '13시');
   });
 
   test('헤더만 있거나 깨진 줄은 무시한다', () {

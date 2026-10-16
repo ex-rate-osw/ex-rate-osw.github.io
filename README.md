@@ -5,7 +5,7 @@
 ```
 .github/workflows/collect.yml   매시간 실행되는 수집 워크플로
 scripts/collect.py              환율을 받아 CSV에 한 줄 추가 (파이썬 표준 라이브러리만 사용)
-data/rates.csv                  수집된 기록 (timestamp_kst, usd, jpy100, eur, source)
+data/rates.csv                  수집된 기록 (slot_kst=몇 시 기록인지, timestamp_kst=실제 수집 시각, usd, jpy100, eur, source)
 index.html                      그래프 · 일자별 표 페이지
 ```
 
