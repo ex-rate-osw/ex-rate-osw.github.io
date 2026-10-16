@@ -111,7 +111,23 @@ def append_row(rates, now=None):
     return row
 
 
+def already_recorded_this_hour(now=None):
+    """이번 시간(KST)에 이미 기록이 있으면 True"""
+    now = now or datetime.now(KST)
+    if not os.path.exists(CSV_PATH):
+        return False
+    with open(CSV_PATH, encoding="utf-8") as f:
+        lines = [l for l in f.read().splitlines() if l.strip()]
+    if len(lines) < 2:
+        return False
+    return lines[-1].startswith(now.strftime("%Y-%m-%d %H:"))
+
+
 def main():
+    force = os.environ.get("FORCE_COLLECT", "").lower() in ("1", "true")
+    if not force and already_recorded_this_hour():
+        print("[skip] 이번 시간은 이미 기록됨")
+        return 0
     try:
         rates = fetch()
     except Exception as e:
