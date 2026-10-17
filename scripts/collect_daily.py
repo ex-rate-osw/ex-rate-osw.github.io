@@ -45,6 +45,20 @@ class StopCollect(Exception):
     """더 호출해도 의미 없는 오류 (인증키 오류, 한도 초과 등)"""
 
 
+class CollectFailed(Exception):
+    """조회한 날짜가 모두 실패함"""
+
+    def __init__(self, errors):
+        self.errors = errors
+        super().__init__(f"{len(errors)}건 모두 실패 - 첫 오류: {errors[0][1]}")
+
+
+def annotate(msg):
+    """GitHub Actions 실행 화면에 오류 알림으로 표시 (로그인 없이도 보임)"""
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print("::error::" + msg.replace("\n", " ").replace("%", "%25"))
+
+
 # 일부 환경에서 쿠키 없이 요청하면 리다이렉트가 반복되는 경우가 있어 쿠키를 유지한다.
 _opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
@@ -150,6 +164,7 @@ def collect(api_key, now=None, fetch=fetch_day, sleep=time.sleep):
     empty = read_empty()
     todo = dates_to_check(have, empty, now)
     added_days, empty_days, calls = [], [], 0
+    errors = []  # (날짜, 오류) — 네트워크·응답 오류
 
     for d in todo:
         if calls >= MAX_CALLS:
@@ -160,8 +175,12 @@ def collect(api_key, now=None, fetch=fetch_day, sleep=time.sleep):
         except StopCollect:
             raise
         except Exception as e:  # 네트워크 오류 등은 그날만 건너뛰고 다음 실행에서 다시 시도
-            print(f"[warn] {d} 조회 실패 - {e}", file=sys.stderr)
+            msg = f"{type(e).__name__}: {e}"
+            print(f"[warn] {d} 조회 실패 - {msg}", file=sys.stderr)
+            errors.append((d.isoformat(), msg))
             calls += 1
+            if len(errors) >= 5 and not added_days and not empty_days:
+                break  # 처음부터 연달아 실패하면 더 호출하지 않음 (같은 원인일 가능성이 큼)
             continue
         calls += 1
         if day_rows:
@@ -177,6 +196,8 @@ def collect(api_key, now=None, fetch=fetch_day, sleep=time.sleep):
         write_rows(rows)
     if empty_days:
         write_empty(empty)
+    if errors and not added_days and not empty_days:
+        raise CollectFailed(errors)
     return added_days, empty_days, calls
 
 
@@ -189,6 +210,12 @@ def main():
         added, empty, calls = collect(api_key)
     except StopCollect as e:
         print(f"[error] {e}", file=sys.stderr)
+        annotate(str(e))
+        return 1
+    except CollectFailed as e:
+        print(f"[error] 수출입은행 API 조회 실패: {e}", file=sys.stderr)
+        for day, msg in e.errors[:3]:
+            annotate(f"{day} 조회 실패 - {msg}"[:300])
         return 1
     print(f"[ok] 호출 {calls}회 · 추가 {len(added)}일"
           + (f" ({added[0]} ~ {added[-1]})" if added else "")
