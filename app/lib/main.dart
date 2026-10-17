@@ -40,14 +40,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 앱이 화면에 떠 있는 동안 자동으로 다시 받아오는 간격
   static const _autoRefreshInterval = Duration(minutes: 10);
 
-  List<RateRecord> _rows = const [];
+  RatesData _data = RatesData(const [], const {});
   bool _loading = true; // 첫 로딩
   bool _refreshing = false; // 받아오는 중 (중복 요청 방지)
   String? _error;
   DateTime? _checkedAt;
   Timer? _timer;
-  Currency _currency = Currency.usd;
-  RateRange _range = RateRange.week;
+  String _code = 'USD';
+  RateView _view = RateView.day;
 
   @override
   void initState() {
@@ -84,11 +84,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _timer?.cancel();
     if (mounted) setState(() => _refreshing = true);
     try {
-      final rows = await fetchRates();
+      final data = await fetchRates();
       if (!mounted) return;
       setState(() {
-        _rows = rows;
+        _data = data;
         _error = null;
+        if (data.info(_code) == null && data.currencies.isNotEmpty) _code = data.currencies.first.code;
       });
     } catch (e) {
       if (!mounted) return;
@@ -120,8 +121,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final last = _rows.isEmpty ? null : _rows.last;
-    final ranged = filterRange(_rows, _range);
+    final text = Theme.of(context).textTheme;
+    final small = TextStyle(fontSize: 12, color: scheme.onSurfaceVariant);
+    final info = _data.info(_code);
+    final list = _data.series[_code] ?? const <DailyRate>[];
+    final points = groupRates(list, _view);
+    final lastDate = _data.lastDate;
 
     return Scaffold(
       appBar: AppBar(
@@ -131,11 +136,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             tooltip: '새로고침',
             onPressed: _refreshing ? null : _load,
             icon: _refreshing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.refresh),
           ),
         ],
@@ -156,25 +157,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         child: Text(_error!, style: TextStyle(color: scheme.onErrorContainer)),
                       ),
                     ),
-                  Text(
-                    last == null
-                        ? '기록 없음'
-                        : '마지막 기록 ${last.date} ${last.hourLabel} (${last.howCollected}, KST)',
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                  ),
+                  Text(lastDate == null ? '아직 기록이 없어요' : '마지막 고시일 ${longLabel(lastDate, RateView.day)}',
+                      style: small),
                   if (_checkedAt != null)
                     Text(
                       '${_hhmm(_checkedAt!)} 확인 · 다음 자동 갱신 ${_hhmm(_checkedAt!.add(_autoRefreshInterval))}',
-                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                      style: small,
                     ),
-                  const SizedBox(height: 8),
-                  for (final c in Currency.values)
-                    _CurrencyCard(
-                      currency: c,
-                      rows: _rows,
-                      selected: c == _currency,
-                      onTap: () => setState(() => _currency = c),
-                    ),
+                  const SizedBox(height: 10),
+                  _CurrencyChips(
+                    currencies: _data.currencies,
+                    selected: _code,
+                    onSelected: (c) => setState(() => _code = c),
+                  ),
+                  const SizedBox(height: 10),
+                  if (info != null && list.isNotEmpty) _SummaryCard(info: info, list: list),
                   const SizedBox(height: 12),
                   Card(
                     child: Padding(
@@ -184,25 +181,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         children: [
                           Padding(
                             padding: const EdgeInsets.only(left: 8),
-                            child: Text(
-                              '${_currency.label} 추이 (${_currency.unit})',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${info?.name ?? ''} ${_view.label} 추이', style: text.titleMedium),
+                                Text(_view.description, style: small),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 12),
                           Center(
-                            child: SegmentedButton<RateRange>(
+                            child: SegmentedButton<RateView>(
                               showSelectedIcon: false,
                               segments: [
-                                for (final r in RateRange.values)
-                                  ButtonSegment(value: r, label: Text(r.label)),
+                                for (final v in RateView.values) ButtonSegment(value: v, label: Text(v.label)),
                               ],
-                              selected: {_range},
-                              onSelectionChanged: (s) => setState(() => _range = s.first),
+                              selected: {_view},
+                              onSelectionChanged: (s) => setState(() => _view = s.first),
                             ),
                           ),
                           const SizedBox(height: 16),
-                          RateChart(rows: ranged, currency: _currency, range: _range),
+                          RateChart(points: points, view: _view),
                         ],
                       ),
                     ),
@@ -210,13 +209,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-                    child: Text('일자별 · ${_currency.label}',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    child: Text('${_view.label} 기록 · ${info?.name ?? ''}', style: text.titleMedium),
                   ),
-                  for (final d in summarizeByDate(ranged, _currency)) _DailyTile(summary: d),
+                  for (final p in points.reversed) _PointTile(point: p, view: _view),
                   const SizedBox(height: 16),
                   Text(
-                    '시장 환율 기준이라 은행 고시환율과 차이가 있을 수 있어요.\n데이터: Twelve Data / Rates By Exchange Rate API',
+                    '매매기준율 기준 · 출처: 한국수출입은행\n영업일 오전 11시 전후 하루 1번 고시',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
                   ),
@@ -227,91 +225,134 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 }
 
-class _CurrencyCard extends StatelessWidget {
-  const _CurrencyCard({
-    required this.currency,
-    required this.rows,
-    required this.selected,
-    required this.onTap,
-  });
+class _CurrencyChips extends StatelessWidget {
+  const _CurrencyChips({required this.currencies, required this.selected, required this.onSelected});
 
-  final Currency currency;
-  final List<RateRecord> rows;
-  final bool selected;
-  final VoidCallback onTap;
+  final List<CurrencyInfo> currencies;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: currencies.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final c = currencies[i];
+          return ChoiceChip(
+            label: Text('${c.name} ${c.code}'),
+            selected: c.code == selected,
+            showCheckmark: false,
+            onSelected: (_) => onSelected(c.code),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.info, required this.list});
+
+  final CurrencyInfo info;
+  final List<DailyRate> list;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final now = rows.isEmpty ? null : rows.last.value(currency);
-    final prev = previousClose(rows, currency);
+    final small = TextStyle(fontSize: 13, color: scheme.onSurfaceVariant);
+    final last = list.last;
+    final prev = list.length > 1 ? list[list.length - 2].base : null;
 
     Widget diff;
-    if (now == null || prev == null) {
-      diff = Text('전일 데이터 없음', style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant));
+    if (prev == null) {
+      diff = Text('이전 기록 없음', style: small);
     } else {
-      final d = now - prev;
+      final d = last.base - prev;
       final pct = d / prev * 100;
       final color = d > 0 ? _upColor : (d < 0 ? _downColor : scheme.onSurfaceVariant);
       final sign = d > 0 ? '▲' : (d < 0 ? '▼' : '–');
-      diff = Text(
-        '$sign ${formatNumber(d.abs())} (${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(2)}%)',
-        style: TextStyle(fontSize: 13, color: color),
-      );
+      diff = Text.rich(TextSpan(children: [
+        TextSpan(
+          text: '$sign ${formatNumber(d.abs())} (${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(2)}%)',
+          style: TextStyle(fontSize: 13, color: color),
+        ),
+        TextSpan(text: '  전 영업일 대비', style: small),
+      ]));
     }
 
     return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: selected ? scheme.primary : scheme.outlineVariant,
-          width: selected ? 2 : 1,
-        ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${currency.label} · ${currency.unit}',
-                        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 4),
-                    diff,
-                  ],
-                ),
-              ),
-              Text(
-                now == null ? '–' : '${formatNumber(now)}원',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${info.name} · ${info.unitText} · ${longLabel(last.date, RateView.day)} 고시', style: small),
+            const SizedBox(height: 4),
+            Text(
+              '${formatNumber(last.base)}원',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+            ),
+            const SizedBox(height: 2),
+            diff,
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: Text('송금 보낼 때  ${last.tts > 0 ? formatNumber(last.tts) : '–'}', style: small)),
+                Expanded(child: Text('송금 받을 때  ${last.ttb > 0 ? formatNumber(last.ttb) : '–'}', style: small)),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _DailyTile extends StatelessWidget {
-  const _DailyTile({required this.summary});
+class _PointTile extends StatelessWidget {
+  const _PointTile({required this.point, required this.view});
 
-  final DailySummary summary;
+  final RatePoint point;
+  final RateView view;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final s = summary;
+    final p = point;
     final small = TextStyle(fontSize: 12, color: scheme.onSurfaceVariant);
+    final numStyle = const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()]);
+
+    final Widget detail;
+    final Widget trailing;
+    if (view == RateView.day) {
+      final d = p.prev == null ? null : p.value - p.prev!;
+      final color = d == null || d == 0 ? scheme.onSurfaceVariant : (d > 0 ? _upColor : _downColor);
+      detail = Text(
+        '보낼 때 ${p.tts != null && p.tts! > 0 ? formatNumber(p.tts!) : '–'} · 받을 때 ${p.ttb != null && p.ttb! > 0 ? formatNumber(p.ttb!) : '–'}',
+        style: small,
+      );
+      trailing = Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(formatNumber(p.value), style: numStyle),
+          Text(d == null ? '–' : '${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${formatNumber(d.abs())}',
+              style: TextStyle(fontSize: 12, color: color)),
+        ],
+      );
+    } else {
+      detail = Text(
+        '시 ${formatNumber(p.open)} · 고 ${formatNumber(p.high)} · 저 ${formatNumber(p.low)} · 종 ${formatNumber(p.close)}\n고시 ${p.days}일',
+        style: small,
+      );
+      trailing = Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [Text('평균', style: small), Text(formatNumber(p.value), style: numStyle)],
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 3),
       child: Padding(
@@ -322,30 +363,14 @@ class _DailyTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${s.date} (${s.weekday})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(longLabel(p.key, view), style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
-                  Text(
-                    '시 ${formatNumber(s.open)} · 고 ${formatNumber(s.high)} · 저 ${formatNumber(s.low)}',
-                    style: small,
-                  ),
-                  Text('평균 ${formatNumber(s.average)} · 기록 ${s.count}회', style: small),
+                  detail,
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('종가', style: small),
-                Text(
-                  formatNumber(s.close),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(width: 12),
+            trailing,
           ],
         ),
       ),

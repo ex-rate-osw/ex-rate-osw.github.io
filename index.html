@@ -7,12 +7,12 @@
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1a1d23; --muted: #6b7280; --line: #e5e7eb;
-    --accent: #2563eb; --up: #dc2626; --down: #2563eb; --grid: rgba(0,0,0,.06);
+    --accent: #2563eb; --up: #dc2626; --down: #2563eb; --grid: rgba(0,0,0,.06); --chip: #eef1f5;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #111318; --card: #1a1d24; --text: #e8eaed; --muted: #9aa0a6; --line: #2a2e37;
-      --accent: #60a5fa; --up: #f87171; --down: #60a5fa; --grid: rgba(255,255,255,.07);
+      --accent: #60a5fa; --up: #f87171; --down: #60a5fa; --grid: rgba(255,255,255,.07); --chip: #232731;
     }
   }
   * { box-sizing: border-box; }
@@ -22,28 +22,33 @@
     font-variant-numeric: tabular-nums;
   }
   main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
   h1 { font-size: 22px; margin: 0; }
-  .updated { color: var(--muted); font-size: 13px; }
+  .muted { color: var(--muted); font-size: 13px; }
 
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-  .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
-    cursor: pointer; text-align: left; color: inherit; font: inherit;
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; scrollbar-width: thin; }
+  .chip {
+    flex: none; border: 1px solid transparent; background: var(--chip); color: var(--text);
+    font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
   }
-  .card[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-  .card .name { font-size: 13px; color: var(--muted); }
-  .card .value { font-size: 24px; font-weight: 700; margin: 4px 0 2px; }
-  .card .diff { font-size: 13px; }
+  .chip small { color: var(--muted); margin-left: 4px; }
+  .chip[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .chip[aria-pressed="true"] small { color: rgba(255,255,255,.8); }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .summary { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: end; }
+  .summary .name { font-size: 14px; color: var(--muted); }
+  .summary .value { font-size: 30px; font-weight: 700; margin: 4px 0; }
+  .summary .sub { display: flex; gap: 20px; font-size: 13px; color: var(--muted); }
+  .summary .sub b { color: var(--text); font-weight: 600; margin-left: 6px; }
   .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
 
-  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
   .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .panel-head h2 { font-size: 16px; margin: 0; }
   .tabs { display: inline-flex; background: var(--bg); border-radius: 8px; padding: 3px; }
   .tabs button {
     border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
-    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
   }
   .tabs button[aria-pressed="true"] { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
   .chart-wrap { position: relative; height: 320px; }
@@ -53,14 +58,13 @@
   th:first-child, td:first-child { text-align: left; }
   th { color: var(--muted); font-weight: 500; font-size: 12px; }
   .table-scroll { overflow-x: auto; }
-
   .empty { color: var(--muted); text-align: center; padding: 48px 0; }
   footer { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   footer a { color: inherit; }
 
   @media (max-width: 600px) {
-    .cards { grid-template-columns: 1fr; }
-    .card .value { font-size: 20px; }
+    .summary { grid-template-columns: 1fr; }
+    .summary .value { font-size: 26px; }
     .chart-wrap { height: 260px; }
   }
 </style>
@@ -69,19 +73,20 @@
 <main>
   <header>
     <h1>환율 기록</h1>
-    <span class="updated" id="updated">불러오는 중…</span>
+    <span class="muted" id="updated">불러오는 중…</span>
   </header>
 
-  <section class="cards" id="cards"></section>
+  <nav class="chips" id="chips" aria-label="통화 선택"></nav>
+
+  <section class="panel summary" id="summary"></section>
 
   <section class="panel">
     <div class="panel-head">
       <h2 id="chartTitle">추이</h2>
-      <div class="tabs" id="rangeTabs">
-        <button data-range="today">오늘</button>
-        <button data-range="7d" aria-pressed="true">7일</button>
-        <button data-range="30d">30일</button>
-        <button data-range="all">전체</button>
+      <div class="tabs" id="viewTabs">
+        <button data-view="day" aria-pressed="true">일별</button>
+        <button data-view="week">주별</button>
+        <button data-view="month">월별</button>
       </div>
     </div>
     <div class="chart-wrap"><canvas id="chart"></canvas></div>
@@ -89,124 +94,167 @@
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2 id="tableTitle">일자별</h2></div>
+    <div class="panel-head"><h2 id="tableTitle">기록</h2></div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>날짜</th><th>시가</th><th>고가</th><th>저가</th><th>종가</th><th>평균</th><th>기록</th></tr></thead>
-        <tbody id="dailyBody"></tbody>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
       </table>
     </div>
   </section>
 
   <footer>
-    <span>시장 환율 기준 · 은행 고시환율과 차이가 있을 수 있어요</span>
-    <span><a href="data/rates.csv" download>CSV 받기</a> · 데이터: Twelve Data / <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a></span>
+    <span>매매기준율 기준 · 출처: 한국수출입은행 (영업일 오전 11시 전후 고시)</span>
+    <span><a href="data/daily.csv" download>CSV 받기</a></span>
   </footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script>
-const CUR = {
-  usd:    { name: '미국 달러', unit: 'USD 1' },
-  jpy100: { name: '일본 엔',   unit: 'JPY 100' },
-  eur:    { name: '유로',      unit: 'EUR 1' },
+// 칩 맨 앞에 보여줄 통화 순서 (나머지는 이름순)
+const PINNED = ['USD', 'JPY', 'EUR', 'CNH', 'GBP', 'HKD', 'AUD', 'CAD', 'CHF', 'SGD', 'THB'];
+const VIEWS = {
+  day:   { label: '일별', count: 60,  unitLabel: '최근 60영업일' },
+  week:  { label: '주별', count: 52,  unitLabel: '최근 52주 · 주 평균' },
+  month: { label: '월별', count: 24,  unitLabel: '최근 24개월 · 월 평균' },
 };
-const state = { cur: 'usd', range: '7d' };
-let rows = [];
+const state = { code: 'USD', view: 'day' };
+let byCode = new Map();   // code -> [{date, base, ttb, tts}] (날짜순)
+let meta = new Map();     // code -> {name, unit}
 let chart = null;
 
 const fmt = n => n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const slotHour = r => `${+r.slot.slice(11, 13)}시`;
-// 빠진 시간대를 시간봉으로 채운 기록인지에 따라 '13:43 수집' / '정각 시세로 보충'
-const howCollected = r => r.source === 'twelvedata-1h' ? '정각 시세로 보충' : `${r.ts.slice(11, 16)} 수집`;
-const toDate = ts => new Date(ts.replace(' ', 'T') + ':00+09:00'); // 기록은 항상 KST
+const DOW = '일월화수목금토';
+const parseDate = s => new Date(s + 'T00:00:00');
+const md = s => `${+s.slice(5, 7)}/${+s.slice(8, 10)}`;
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function weekStart(s) { const d = parseDate(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); }
 
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
   const head = (lines.shift() || '').split(',');
-  return lines.map(line => {
+  byCode = new Map(); meta = new Map();
+  for (const line of lines) {
     const v = line.split(',');
     const o = Object.fromEntries(head.map((h, i) => [h, v[i]]));
-    return {
-      ts: o.timestamp_kst,
-      // 어느 시간대 기록인지 (예전 기록은 수집 시각의 정시로 대체)
-      slot: o.slot_kst || (o.timestamp_kst || '').slice(0, 13) + ':00',
-      date: (o.slot_kst || o.timestamp_kst || '').slice(0, 10),
-      usd: +o.usd, jpy100: +o.jpy100, eur: +o.eur, source: o.source,
-    };
-  }).filter(r => r.ts && Number.isFinite(r.usd)).sort((a, b) => a.slot.localeCompare(b.slot));
+    const base = +o.base;
+    if (!o.date || !o.code || !Number.isFinite(base) || base <= 0) continue;
+    if (!byCode.has(o.code)) byCode.set(o.code, []);
+    byCode.get(o.code).push({ date: o.date, base, ttb: +o.ttb, tts: +o.tts });
+    meta.set(o.code, { name: o.name, unit: +o.unit || 1 });
+  }
+  for (const list of byCode.values()) list.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function rangeRows() {
-  if (!rows.length) return [];
-  const last = rows[rows.length - 1];
-  if (state.range === 'today') return rows.filter(r => r.date === last.date);
-  if (state.range === 'all') return rows;
-  const days = state.range === '7d' ? 7 : 30;
-  const cutoff = toDate(last.slot).getTime() - days * 86400000; // 마지막 기록 기준 (주말에도 비지 않게)
-  return rows.filter(r => toDate(r.slot).getTime() >= cutoff);
+function codes() {
+  const all = [...byCode.keys()];
+  const pinned = PINNED.filter(c => byCode.has(c));
+  const rest = all.filter(c => !PINNED.includes(c)).sort((a, b) => meta.get(a).name.localeCompare(meta.get(b).name, 'ko'));
+  return [...pinned, ...rest];
+}
+const unitText = code => `${code} ${meta.get(code)?.unit || 1}`;
+
+// 기간별로 묶기: 시가(첫날)·고가·저가·종가(마지막날)·평균
+function groups(list, view) {
+  if (view === 'day') {
+    return list.slice(-VIEWS.day.count).map((r, i, arr) => {
+      const prev = i > 0 ? arr[i - 1] : list[list.length - arr.length - 1];
+      return { key: r.date, value: r.base, ttb: r.ttb, tts: r.tts, prev: prev ? prev.base : null };
+    });
+  }
+  const keyOf = view === 'week' ? r => weekStart(r.date) : r => r.date.slice(0, 7);
+  const map = new Map();
+  for (const r of list) {
+    const k = keyOf(r);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(r.base);
+  }
+  return [...map.entries()].slice(-VIEWS[view].count).map(([key, v]) => ({
+    key, value: v.reduce((a, b) => a + b, 0) / v.length,
+    open: v[0], close: v[v.length - 1], high: Math.max(...v), low: Math.min(...v), days: v.length,
+  }));
 }
 
-function prevClose(key) {
-  const last = rows[rows.length - 1];
-  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].date !== last.date) return rows[i][key];
-  return null;
+function label(key, view) {
+  if (view === 'day') return md(key);
+  if (view === 'week') return `${md(key)}주`;
+  return `${key.slice(2, 4)}.${key.slice(5, 7)}`;
+}
+function longLabel(key, view) {
+  if (view === 'day') return `${key} (${DOW[parseDate(key).getDay()]})`;
+  if (view === 'week') {
+    const end = parseDate(key); end.setDate(end.getDate() + 4);
+    return `${key} ~ ${md(iso(end))}`;
+  }
+  return `${key.slice(0, 4)}년 ${+key.slice(5, 7)}월`;
 }
 
-function renderCards() {
-  const el = document.getElementById('cards');
-  const last = rows[rows.length - 1];
-  el.innerHTML = Object.entries(CUR).map(([key, c]) => {
-    const now = last ? last[key] : null;
-    const prev = last ? prevClose(key) : null;
-    let diff = '<span class="flat">전일 데이터 없음</span>';
-    if (now != null && prev != null) {
-      const d = now - prev, pct = d / prev * 100;
-      const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
-      const sign = d > 0 ? '▲' : d < 0 ? '▼' : '–';
-      diff = `<span class="${cls}">${sign} ${fmt(Math.abs(d))} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)</span> <span class="flat">전일 대비</span>`;
-    }
-    return `<button class="card" data-cur="${key}" aria-pressed="${state.cur === key}">
-      <div class="name">${c.name} · ${c.unit}</div>
-      <div class="value">${now != null ? fmt(now) + '원' : '–'}</div>
-      <div class="diff">${now != null ? diff : ''}</div>
-    </button>`;
-  }).join('');
-  el.querySelectorAll('.card').forEach(b => b.onclick = () => { state.cur = b.dataset.cur; render(); });
+function renderChips() {
+  const el = document.getElementById('chips');
+  el.innerHTML = codes().map(c =>
+    `<button class="chip" data-code="${c}" aria-pressed="${c === state.code}">${meta.get(c).name}<small>${c}</small></button>`
+  ).join('');
+  el.querySelectorAll('.chip').forEach(b => b.onclick = () => { state.code = b.dataset.code; render(); });
+}
+
+function diffHtml(now, prev, suffix) {
+  if (prev == null) return '<span class="flat">이전 기록 없음</span>';
+  const d = now - prev, pct = d / prev * 100;
+  const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  const sign = d > 0 ? '▲' : d < 0 ? '▼' : '–';
+  return `<span class="${cls}">${sign} ${fmt(Math.abs(d))} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)</span> <span class="flat">${suffix}</span>`;
+}
+
+function renderSummary() {
+  const el = document.getElementById('summary');
+  const list = byCode.get(state.code) || [];
+  const last = list[list.length - 1], prev = list[list.length - 2];
+  if (!last) { el.innerHTML = '<div class="muted">데이터 없음</div>'; return; }
+  el.innerHTML = `
+    <div>
+      <div class="name">${meta.get(state.code).name} · ${unitText(state.code)} · ${longLabel(last.date, 'day')} 고시</div>
+      <div class="value">${fmt(last.base)}원</div>
+      <div>${diffHtml(last.base, prev?.base, '전 영업일 대비')}</div>
+    </div>
+    <div class="sub">
+      <span>송금 보낼 때<b>${last.tts ? fmt(last.tts) : '–'}</b></span>
+      <span>송금 받을 때<b>${last.ttb ? fmt(last.ttb) : '–'}</b></span>
+    </div>`;
 }
 
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-function renderChart() {
-  const data = rangeRows();
-  const c = CUR[state.cur];
-  document.getElementById('chartTitle').textContent = `${c.name} 추이 (${c.unit})`;
+function renderChart(data) {
+  const v = VIEWS[state.view];
+  document.getElementById('chartTitle').textContent = `${meta.get(state.code)?.name || ''} ${v.label} 추이 (${v.unitLabel})`;
   const empty = !data.length;
   document.getElementById('empty').hidden = !empty;
   document.querySelector('.chart-wrap').hidden = empty;
   if (empty) return;
 
-  const labels = data.map(r => state.range === 'today'
-    ? slotHour(r)
-    : `${r.slot.slice(5, 7)}/${r.slot.slice(8, 10)} ${slotHour(r)}`);
-  const values = data.map(r => r[state.cur]);
   const accent = cssVar('--accent'), muted = cssVar('--muted'), grid = cssVar('--grid');
-
-  const config = {
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), {
     type: 'line',
-    data: { labels, datasets: [{
-      data: values, borderColor: accent, backgroundColor: accent + '22', fill: true,
-      borderWidth: 2, tension: 0.25, pointRadius: data.length > 48 ? 0 : 2, pointHoverRadius: 4,
-    }]},
+    data: {
+      labels: data.map(g => label(g.key, state.view)),
+      datasets: [{
+        data: data.map(g => g.value), borderColor: accent, backgroundColor: accent + '22', fill: true,
+        borderWidth: 2, tension: 0.25, pointRadius: data.length > 40 ? 0 : 2.5, pointHoverRadius: 4,
+      }],
+    },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: {
-          title: items => { const r = data[items[0].dataIndex];
-            return `${r.slot.slice(5, 7)}/${r.slot.slice(8, 10)} ${slotHour(r)} 기록 (${howCollected(r)})`; },
-          label: ctx => ` ${fmt(ctx.parsed.y)}원`,
+          title: items => longLabel(data[items[0].dataIndex].key, state.view),
+          label: ctx => {
+            const g = data[ctx.dataIndex];
+            if (state.view === 'day') return ` 매매기준율 ${fmt(g.value)}원`;
+            return [` 평균 ${fmt(g.value)}원`, ` 시가 ${fmt(g.open)} · 종가 ${fmt(g.close)}`, ` 고가 ${fmt(g.high)} · 저가 ${fmt(g.low)}`];
+          },
         } },
       },
       scales: {
@@ -214,49 +262,54 @@ function renderChart() {
         y: { ticks: { color: muted, callback: v => fmt(v) }, grid: { color: grid } },
       },
     },
-  };
-  if (chart) chart.destroy();
-  chart = new Chart(document.getElementById('chart'), config);
+  });
 }
 
-function renderTable() {
-  const key = state.cur;
-  document.getElementById('tableTitle').textContent = `일자별 · ${CUR[key].name}`;
-  const byDate = new Map();
-  for (const r of rangeRows()) {
-    if (!byDate.has(r.date)) byDate.set(r.date, []);
-    byDate.get(r.date).push(r[key]);
+function renderTable(data) {
+  const head = document.getElementById('tableHead');
+  const body = document.getElementById('tableBody');
+  document.getElementById('tableTitle').textContent = `${VIEWS[state.view].label} 기록 · ${meta.get(state.code)?.name || ''}`;
+  if (state.view === 'day') {
+    head.innerHTML = '<tr><th>날짜</th><th>매매기준율</th><th>전일 대비</th><th>송금 보낼 때</th><th>송금 받을 때</th></tr>';
+    body.innerHTML = [...data].reverse().map(g => {
+      const d = g.prev == null ? null : g.value - g.prev;
+      const cls = d == null ? 'flat' : d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+      const txt = d == null ? '–' : `${d > 0 ? '▲' : d < 0 ? '▼' : ''} ${fmt(Math.abs(d))}`;
+      return `<tr><td>${longLabel(g.key, 'day')}</td><td>${fmt(g.value)}</td><td class="${cls}">${txt}</td>
+        <td>${g.tts ? fmt(g.tts) : '–'}</td><td>${g.ttb ? fmt(g.ttb) : '–'}</td></tr>`;
+    }).join('');
+  } else {
+    head.innerHTML = '<tr><th>기간</th><th>평균</th><th>시가</th><th>고가</th><th>저가</th><th>종가</th><th>고시일</th></tr>';
+    body.innerHTML = [...data].reverse().map(g => `<tr><td>${longLabel(g.key, state.view)}</td><td>${fmt(g.value)}</td>
+      <td>${fmt(g.open)}</td><td>${fmt(g.high)}</td><td>${fmt(g.low)}</td><td>${fmt(g.close)}</td><td>${g.days}일</td></tr>`).join('');
   }
-  const body = document.getElementById('dailyBody');
-  if (!byDate.size) { body.innerHTML = '<tr><td colspan="7" class="flat">데이터 없음</td></tr>'; return; }
-  body.innerHTML = [...byDate.entries()].reverse().map(([date, v]) => {
-    const avg = v.reduce((a, b) => a + b, 0) / v.length;
-    const dow = '일월화수목금토'[toDate(date + ' 12:00').getDay()];
-    return `<tr><td>${date} (${dow})</td><td>${fmt(v[0])}</td><td>${fmt(Math.max(...v))}</td>
-      <td>${fmt(Math.min(...v))}</td><td>${fmt(v[v.length - 1])}</td><td>${fmt(avg)}</td><td>${v.length}</td></tr>`;
-  }).join('');
+  if (!data.length) body.innerHTML = '<tr><td colspan="7" class="flat">데이터 없음</td></tr>';
 }
 
 function render() {
-  document.querySelectorAll('#rangeTabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.range === state.range));
-  renderCards();
-  renderChart();
-  renderTable();
+  document.querySelectorAll('#viewTabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === state.view));
+  renderChips();
+  renderSummary();
+  const data = groups(byCode.get(state.code) || [], state.view);
+  renderChart(data);
+  renderTable(data);
 }
 
-document.querySelectorAll('#rangeTabs button').forEach(b => b.onclick = () => { state.range = b.dataset.range; render(); });
+document.querySelectorAll('#viewTabs button').forEach(b => b.onclick = () => { state.view = b.dataset.view; render(); });
 
-fetch('data/rates.csv?t=' + Date.now())
+fetch('data/daily.csv?t=' + Date.now())
   .then(res => { if (!res.ok) throw new Error(res.status); return res.text(); })
   .then(text => {
-    rows = parseCsv(text);
-    const last = rows[rows.length - 1];
-    document.getElementById('updated').textContent = last
-      ? `마지막 기록 ${last.slot.slice(0, 10)} ${slotHour(last)} (${howCollected(last)}, KST)` : '기록 없음';
+    parseCsv(text);
+    if (!byCode.has(state.code)) state.code = codes()[0] || 'USD';
+    const lastDate = [...byCode.values()].reduce((m, l) => l.length && l[l.length - 1].date > m ? l[l.length - 1].date : m, '');
+    document.getElementById('updated').textContent = lastDate ? `마지막 고시일 ${longLabel(lastDate, 'day')}` : '기록 없음';
     render();
   })
   .catch(err => {
-    document.getElementById('updated').textContent = '데이터를 불러오지 못했어요';
+    document.getElementById('updated').textContent = '아직 데이터가 없어요';
+    document.getElementById('empty').hidden = false;
+    document.querySelector('.chart-wrap').hidden = true;
     console.error(err);
   });
 </script>

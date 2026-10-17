@@ -1,178 +1,216 @@
-/// 환율 기록 데이터 모델과 계산 로직.
+/// 일별 환율 데이터 모델과 일·주·월 집계 로직.
 /// 웹 페이지(index.html)와 같은 규칙으로 계산한다.
 library;
 
-enum Currency {
-  usd('미국 달러', 'USD 1'),
-  jpy100('일본 엔', 'JPY 100'),
-  eur('유로', 'EUR 1');
+/// 칩 맨 앞에 보여줄 통화 순서 (나머지는 이름순)
+const pinnedCodes = ['USD', 'JPY', 'EUR', 'CNH', 'GBP', 'HKD', 'AUD', 'CAD', 'CHF', 'SGD', 'THB'];
 
-  const Currency(this.label, this.unit);
+enum RateView {
+  day('일별', 60, '최근 60영업일'),
+  week('주별', 52, '최근 52주 · 주 평균'),
+  month('월별', 24, '최근 24개월 · 월 평균');
+
+  const RateView(this.label, this.count, this.description);
   final String label;
-  final String unit;
+  final int count;
+  final String description;
 }
 
-enum RateRange {
-  today('오늘'),
-  week('7일'),
-  month('30일'),
-  all('전체');
+/// 하루치 고시 값
+class DailyRate {
+  const DailyRate({required this.date, required this.base, required this.ttb, required this.tts});
 
-  const RateRange(this.label);
-  final String label;
+  /// 'YYYY-MM-DD'
+  final String date;
+
+  /// 매매기준율
+  final double base;
+
+  /// 송금 받을 때 (전신환 매입율)
+  final double ttb;
+
+  /// 송금 보낼 때 (전신환 매도율)
+  final double tts;
 }
 
-class RateRecord {
-  const RateRecord({
-    required this.slot,
-    required this.ts,
-    required this.usd,
-    required this.jpy100,
-    required this.eur,
-    required this.source,
-  });
+class CurrencyInfo {
+  const CurrencyInfo({required this.code, required this.name, required this.unit});
+  final String code;
+  final String name;
 
-  /// 어느 시간대 기록인지 'YYYY-MM-DD HH:00' (한국시간)  예) 13시 기록
-  final String slot;
+  /// 기준 단위 (JPY, IDR은 100)
+  final int unit;
 
-  /// 실제 수집한 시각 'YYYY-MM-DD HH:MM' (한국시간)
-  final String ts;
-  final double usd;
-  final double jpy100;
-  final double eur;
-  final String source;
-
-  String get date => slot.substring(0, 10);
-
-  /// 시간대 숫자  예) 13
-  int get hour => int.parse(slot.substring(11, 13));
-
-  /// '13시'
-  String get hourLabel => '$hour시';
-
-  /// '10/16 13시'
-  String get slotLabel => '${slot.substring(5, 7)}/${slot.substring(8, 10)} $hourLabel';
-
-  /// 실제 수집 시각 '13:43'
-  String get collectedAt => ts.substring(11, 16);
-
-  /// 빠진 시간대를 시간봉 시가(정각 시세)로 채운 기록인지
-  bool get isBackfilled => source == 'twelvedata-1h';
-
-  /// '13:43 수집' 또는 '정각 시세로 보충'
-  String get howCollected => isBackfilled ? '정각 시세로 보충' : '$collectedAt 수집';
-
-  /// 기록끼리 시간 차이를 계산하는 용도 (모두 KST라 타임존 변환 불필요)
-  DateTime get time => DateTime.parse(slot.replaceFirst(' ', 'T'));
-
-  double value(Currency c) => switch (c) {
-        Currency.usd => usd,
-        Currency.jpy100 => jpy100,
-        Currency.eur => eur,
-      };
+  String get unitText => '$code $unit';
 }
 
-class DailySummary {
-  const DailySummary({
-    required this.date,
+/// 그래프의 점 하나 (하루, 한 주, 한 달)
+class RatePoint {
+  const RatePoint({
+    required this.key,
+    required this.value,
     required this.open,
+    required this.close,
     required this.high,
     required this.low,
-    required this.close,
-    required this.average,
-    required this.count,
+    required this.days,
+    this.prev,
+    this.ttb,
+    this.tts,
   });
 
-  final String date;
+  /// 일별: 'YYYY-MM-DD', 주별: 그 주 월요일 'YYYY-MM-DD', 월별: 'YYYY-MM'
+  final String key;
+
+  /// 일별은 그날 매매기준율, 주·월별은 평균
+  final double value;
   final double open;
+  final double close;
   final double high;
   final double low;
-  final double close;
-  final double average;
-  final int count;
+  final int days;
 
-  String get weekday => '월화수목금토일'[DateTime.parse(date).weekday - 1];
+  /// 일별에서 직전 영업일 값
+  final double? prev;
+  final double? ttb;
+  final double? tts;
 }
 
-/// rates.csv 내용을 시간순 기록 목록으로 변환
-List<RateRecord> parseRatesCsv(String text) {
-  final lines = text.trim().split(RegExp(r'\r?\n'));
-  if (lines.isEmpty) return [];
-  final head = lines.first.split(',');
-  final rows = <RateRecord>[];
-  for (final line in lines.skip(1)) {
-    if (line.trim().isEmpty) continue;
-    final cols = line.split(',');
-    final o = <String, String>{
-      for (var i = 0; i < head.length && i < cols.length; i++) head[i]: cols[i],
-    };
-    final ts = o['timestamp_kst'] ?? '';
-    final usd = double.tryParse(o['usd'] ?? '');
-    final jpy = double.tryParse(o['jpy100'] ?? '');
-    final eur = double.tryParse(o['eur'] ?? '');
-    if (ts.length < 16 || usd == null || jpy == null || eur == null) continue;
-    // 예전 기록(slot_kst 없음)은 수집 시각의 정시로 대체
-    final rawSlot = o['slot_kst'] ?? '';
-    final slot = rawSlot.length >= 16 ? rawSlot : '${ts.substring(0, 13)}:00';
-    rows.add(RateRecord(slot: slot, ts: ts, usd: usd, jpy100: jpy, eur: eur, source: o['source'] ?? ''));
-  }
-  rows.sort((a, b) => a.slot.compareTo(b.slot));
-  return rows;
-}
+class RatesData {
+  RatesData(this.currencies, this.series);
 
-/// 마지막 기록 기준으로 기간을 자른다 (주말에도 그래프가 비지 않도록)
-List<RateRecord> filterRange(List<RateRecord> rows, RateRange range) {
-  if (rows.isEmpty) return const [];
-  final last = rows.last;
-  switch (range) {
-    case RateRange.all:
-      return rows;
-    case RateRange.today:
-      return rows.where((r) => r.date == last.date).toList();
-    case RateRange.week:
-    case RateRange.month:
-      final days = range == RateRange.week ? 7 : 30;
-      final cutoff = last.time.subtract(Duration(days: days));
-      return rows.where((r) => !r.time.isBefore(cutoff)).toList();
-  }
-}
+  /// 표시 순서대로 정렬된 통화 목록
+  final List<CurrencyInfo> currencies;
 
-/// 마지막 기록 날짜 이전의 가장 최근 값 (전일 종가)
-double? previousClose(List<RateRecord> rows, Currency c) {
-  if (rows.isEmpty) return null;
-  final lastDate = rows.last.date;
-  for (var i = rows.length - 1; i >= 0; i--) {
-    if (rows[i].date != lastDate) return rows[i].value(c);
-  }
-  return null;
-}
+  /// 통화 코드 → 날짜순 일별 값
+  final Map<String, List<DailyRate>> series;
 
-/// 일자별 시가·고가·저가·종가·평균 (최신 날짜가 먼저)
-List<DailySummary> summarizeByDate(List<RateRecord> rows, Currency c) {
-  final byDate = <String, List<double>>{};
-  for (final r in rows) {
-    byDate.putIfAbsent(r.date, () => []).add(r.value(c));
-  }
-  final result = byDate.entries.map((e) {
-    final v = e.value;
-    var high = v.first, low = v.first, sum = 0.0;
-    for (final x in v) {
-      if (x > high) high = x;
-      if (x < low) low = x;
-      sum += x;
+  bool get isEmpty => series.isEmpty;
+
+  String? get lastDate {
+    String? m;
+    for (final list in series.values) {
+      if (list.isNotEmpty && (m == null || list.last.date.compareTo(m) > 0)) m = list.last.date;
     }
-    return DailySummary(
-      date: e.key,
-      open: v.first,
-      high: high,
-      low: low,
-      close: v.last,
-      average: sum / v.length,
-      count: v.length,
-    );
-  }).toList();
-  result.sort((a, b) => b.date.compareTo(a.date));
-  return result;
+    return m;
+  }
+
+  CurrencyInfo? info(String code) {
+    for (final c in currencies) {
+      if (c.code == code) return c;
+    }
+    return null;
+  }
+}
+
+/// daily.csv (date,code,name,unit,base,ttb,tts) 파싱
+RatesData parseDailyCsv(String text) {
+  final lines = text.trim().split(RegExp(r'\r?\n'));
+  final series = <String, List<DailyRate>>{};
+  final infos = <String, CurrencyInfo>{};
+  if (lines.length > 1) {
+    final head = lines.first.split(',');
+    for (final line in lines.skip(1)) {
+      final cols = line.split(',');
+      final o = <String, String>{
+        for (var i = 0; i < head.length && i < cols.length; i++) head[i]: cols[i],
+      };
+      final date = o['date'] ?? '';
+      final code = o['code'] ?? '';
+      final base = double.tryParse(o['base'] ?? '');
+      if (date.length != 10 || code.isEmpty || base == null || base <= 0) continue;
+      series.putIfAbsent(code, () => []).add(DailyRate(
+            date: date,
+            base: base,
+            ttb: double.tryParse(o['ttb'] ?? '') ?? 0,
+            tts: double.tryParse(o['tts'] ?? '') ?? 0,
+          ));
+      infos[code] = CurrencyInfo(code: code, name: o['name'] ?? code, unit: int.tryParse(o['unit'] ?? '') ?? 1);
+    }
+  }
+  for (final list in series.values) {
+    list.sort((a, b) => a.date.compareTo(b.date));
+  }
+  final pinned = pinnedCodes.where(infos.containsKey).map((c) => infos[c]!).toList();
+  final rest = infos.values.where((c) => !pinnedCodes.contains(c.code)).toList()
+    ..sort((a, b) => a.name.compareTo(b.name));
+  return RatesData([...pinned, ...rest], series);
+}
+
+DateTime _d(String s) => DateTime.parse(s);
+
+String _iso(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// 그 주 월요일 날짜
+String weekStart(String date) {
+  final d = _d(date);
+  return _iso(d.subtract(Duration(days: d.weekday - 1)));
+}
+
+/// 일·주·월별로 묶은 그래프 점 (오래된 것부터)
+List<RatePoint> groupRates(List<DailyRate> list, RateView view) {
+  if (list.isEmpty) return const [];
+  if (view == RateView.day) {
+    final start = list.length > view.count ? list.length - view.count : 0;
+    return [
+      for (var i = start; i < list.length; i++)
+        RatePoint(
+          key: list[i].date,
+          value: list[i].base,
+          open: list[i].base,
+          close: list[i].base,
+          high: list[i].base,
+          low: list[i].base,
+          days: 1,
+          prev: i > 0 ? list[i - 1].base : null,
+          ttb: list[i].ttb,
+          tts: list[i].tts,
+        ),
+    ];
+  }
+  final groups = <String, List<double>>{};
+  for (final r in list) {
+    final key = view == RateView.week ? weekStart(r.date) : r.date.substring(0, 7);
+    groups.putIfAbsent(key, () => []).add(r.base);
+  }
+  final entries = groups.entries.toList();
+  final start = entries.length > view.count ? entries.length - view.count : 0;
+  return [
+    for (final e in entries.sublist(start))
+      RatePoint(
+        key: e.key,
+        value: e.value.reduce((a, b) => a + b) / e.value.length,
+        open: e.value.first,
+        close: e.value.last,
+        high: e.value.reduce((a, b) => a > b ? a : b),
+        low: e.value.reduce((a, b) => a < b ? a : b),
+        days: e.value.length,
+      ),
+  ];
+}
+
+const _dow = '월화수목금토일';
+
+String _md(String s) => '${int.parse(s.substring(5, 7))}/${int.parse(s.substring(8, 10))}';
+
+/// 그래프 축 라벨
+String shortLabel(String key, RateView view) => switch (view) {
+      RateView.day => _md(key),
+      RateView.week => '${_md(key)}주',
+      RateView.month => '${key.substring(2, 4)}.${key.substring(5, 7)}',
+    };
+
+/// 툴팁·목록 라벨
+String longLabel(String key, RateView view) {
+  switch (view) {
+    case RateView.day:
+      return '$key (${_dow[_d(key).weekday - 1]})';
+    case RateView.week:
+      return '$key ~ ${_md(_iso(_d(key).add(const Duration(days: 4))))}';
+    case RateView.month:
+      return '${key.substring(0, 4)}년 ${int.parse(key.substring(5, 7))}월';
+  }
 }
 
 /// 1342.98 → '1,342.98'

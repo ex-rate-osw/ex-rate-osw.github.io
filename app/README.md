@@ -1,11 +1,11 @@
 # 환율 기록 앱 (Flutter)
 
-https://ex-rate-osw.github.io/data/rates.csv 에 쌓이는 기록을 읽어 달러·엔화(100엔)·유로 시세, 추이 그래프, 일자별 시가·고가·저가·종가를 보여주는 Android / iOS 앱입니다.
+https://ex-rate-osw.github.io/data/daily.csv 에 쌓이는 한국수출입은행 일별 고시 환율(23개 통화)을 읽어 매매기준율, 송금 보낼 때/받을 때 환율, 일별·주별·월별 추이 그래프와 기록을 보여주는 Android / iOS 앱입니다.
 
 ```
 lib/main.dart              화면 (통화 카드, 기간 선택, 그래프, 일자별 목록)
 lib/rate_chart.dart        fl_chart 라인 그래프
-lib/models.dart            CSV 파싱, 기간 필터, 전일 대비, 일자별 요약 (웹 페이지와 같은 규칙)
+lib/models.dart            CSV 파싱, 일·주·월 집계, 라벨 (웹 페이지와 같은 규칙)
 lib/rates_repository.dart  CSV 다운로드
 test/widget_test.dart      계산 로직 테스트
 ```
@@ -57,4 +57,6 @@ Xcode에서 Runner → Signing & Capabilities → Team에 본인 Apple ID 선택
 ## 동작
 
 - 앱을 열거나 다시 돌아올 때, 당겨서 새로고침할 때 최신 CSV를 받아옵니다.
-- GitHub Pages 캐시 때문에 방금 수집된 값이 최대 몇 분 늦게 보일 수 있어요.
+- 앱이 화면에 떠 있는 동안 10분마다 자동으로 다시 받아옵니다(새로고침하면 타이머가 다시 시작).
+- 수출입은행 고시는 영업일 하루 1번(오전 11시 전후)이라, 값은 하루에 한 번 바뀝니다.
+- 화면 하단에 출처(한국수출입은행)를 표시합니다.

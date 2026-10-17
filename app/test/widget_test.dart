@@ -1,66 +1,79 @@
 import 'package:ex_rate_app/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _csv = '''slot_kst,timestamp_kst,usd,jpy100,eur,source
-2026-10-14 15:00,2026-10-14 15:07,1340.00,850.00,1500.00,twelvedata
-2026-10-14 16:00,2026-10-14 16:47,1341.50,851.00,1502.00,twelvedata
-2026-10-15 09:00,2026-10-15 09:13,1345.00,852.00,1505.00,twelvedata
-2026-10-15 10:00,2026-10-15 10:58,1343.00,849.00,1508.00,twelvedata
+// 2026-10-05(월) ~ 10-16(금), 10-09(금)은 공휴일로 없음 + 9월 마지막 날
+const _csv = '''date,code,name,unit,base,ttb,tts
+2026-09-30,USD,미국 달러,1,1330.00,1316.70,1343.30
+2026-10-05,USD,미국 달러,1,1340.00,1326.60,1353.40
+2026-10-06,USD,미국 달러,1,1342.00,1328.58,1355.42
+2026-10-07,USD,미국 달러,1,1338.00,1324.62,1351.38
+2026-10-08,USD,미국 달러,1,1344.00,1330.56,1357.44
+2026-10-12,USD,미국 달러,1,1350.00,1336.50,1363.50
+2026-10-16,USD,미국 달러,1,1346.00,1332.54,1359.46
+2026-10-16,JPY,일본 옌,100,850.27,841.77,858.77
+2026-10-16,AED,아랍에미리트 디르함,1,365.25,361.60,368.90
 ''';
 
 void main() {
-  final rows = parseRatesCsv(_csv);
+  final data = parseDailyCsv(_csv);
+  final usd = data.series['USD']!;
 
-  test('CSV를 시간순으로 파싱한다', () {
-    expect(rows.length, 4);
-    expect(rows.last.slot, '2026-10-15 10:00');
-    expect(rows.last.ts, '2026-10-15 10:58');
-    expect(rows.last.hourLabel, '10시');
-    expect(rows.last.slotLabel, '10/15 10시');
-    expect(rows.last.collectedAt, '10:58');
-    expect(rows.last.howCollected, '10:58 수집');
-    expect(rows.first.value(Currency.jpy100), 850.0);
+  test('CSV를 통화별로 날짜순 파싱', () {
+    expect(usd.length, 7);
+    expect(usd.first.date, '2026-09-30');
+    expect(data.info('JPY')!.unit, 100);
+    expect(data.info('JPY')!.unitText, 'JPY 100');
+    expect(data.lastDate, '2026-10-16');
   });
 
-  test('예전 형식(slot_kst 없음)은 수집 시각의 정시로 채운다', () {
-    final old = parseRatesCsv('timestamp_kst,usd,jpy100,eur,source\n2026-10-16 13:43,1348.2,851.9,1511.4,twelvedata\n');
-    expect(old.single.slot, '2026-10-16 13:00');
-    expect(old.single.hourLabel, '13시');
+  test('고정 통화가 먼저, 나머지는 이름순', () {
+    expect(data.currencies.map((c) => c.code).toList(), ['USD', 'JPY', 'AED']);
   });
 
-  test('시간봉으로 채운 기록 표시', () {
-    final r = parseRatesCsv('slot_kst,timestamp_kst,usd,jpy100,eur,source\n'
-        '2026-10-16 14:00,2026-10-16 14:00,1340.1,859.0,1500.1,twelvedata-1h\n').single;
-    expect(r.isBackfilled, isTrue);
-    expect(r.howCollected, '정각 시세로 보충');
+  test('빈 파일·헤더만·깨진 줄', () {
+    expect(parseDailyCsv('').isEmpty, isTrue);
+    expect(parseDailyCsv('date,code,name,unit,base,ttb,tts\n').isEmpty, isTrue);
+    expect(parseDailyCsv('date,code,name,unit,base,ttb,tts\nbroken,line\n').isEmpty, isTrue);
   });
 
-  test('헤더만 있거나 깨진 줄은 무시한다', () {
-    expect(parseRatesCsv('timestamp_kst,usd,jpy100,eur,source\n'), isEmpty);
-    expect(parseRatesCsv('timestamp_kst,usd,jpy100,eur,source\nbroken,line\n'), isEmpty);
+  test('일별: 직전 영업일 값 포함', () {
+    final days = groupRates(usd, RateView.day);
+    expect(days.length, 7);
+    expect(days.last.key, '2026-10-16');
+    expect(days.last.prev, 1350.0);
+    expect(days.first.prev, isNull);
   });
 
-  test('전일 종가와 기간 필터', () {
-    expect(previousClose(rows, Currency.usd), 1341.5);
-    expect(filterRange(rows, RateRange.today).length, 2);
-    expect(filterRange(rows, RateRange.week).length, 4);
+  test('주별: 월요일 기준으로 묶고 평균·시가·종가·고가·저가', () {
+    final weeks = groupRates(usd, RateView.week);
+    expect(weeks.map((w) => w.key).toList(), ['2026-09-28', '2026-10-05', '2026-10-12']);
+    final w = weeks[1];
+    expect(w.days, 4);
+    expect(w.open, 1340.0);
+    expect(w.close, 1344.0);
+    expect(w.high, 1344.0);
+    expect(w.low, 1338.0);
+    expect(w.value, 1341.0);
   });
 
-  test('일자별 요약은 최신 날짜가 먼저', () {
-    final d = summarizeByDate(rows, Currency.usd);
-    expect(d.first.date, '2026-10-15');
-    expect(d.first.open, 1345.0);
-    expect(d.first.close, 1343.0);
-    expect(d.first.high, 1345.0);
-    expect(d.first.low, 1343.0);
-    expect(d.first.average, 1344.0);
-    expect(d.first.weekday, '목');
+  test('월별', () {
+    final months = groupRates(usd, RateView.month);
+    expect(months.map((m) => m.key).toList(), ['2026-09', '2026-10']);
+    expect(months.last.days, 6);
+  });
+
+  test('라벨', () {
+    expect(weekStart('2026-10-16'), '2026-10-12');
+    expect(weekStart('2026-10-12'), '2026-10-12');
+    expect(shortLabel('2026-10-12', RateView.week), '10/12주');
+    expect(longLabel('2026-10-12', RateView.week), '2026-10-12 ~ 10/16');
+    expect(longLabel('2026-10-16', RateView.day), '2026-10-16 (금)');
+    expect(shortLabel('2026-10', RateView.month), '26.10');
+    expect(longLabel('2026-10', RateView.month), '2026년 10월');
   });
 
   test('숫자 포맷', () {
     expect(formatNumber(1342.98), '1,342.98');
-    expect(formatNumber(850.27), '850.27');
     expect(formatNumber(-1234567.5, digits: 1), '-1,234,567.5');
-    expect(formatNumber(1342.4, digits: 0), '1,342');
   });
 }
