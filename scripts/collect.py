@@ -9,6 +9,9 @@
   slot_kst      어느 시간대 기록인지  예) 2026-10-16 13:00 = 13시 기록
   timestamp_kst 실제 수집한 시각     예) 2026-10-16 13:43
   usd, jpy100, eur, source  (모두 원화 기준, 엔화는 100엔당)
+
+GitHub 예약 실행은 자주 건너뛰어지므로, 실행될 때마다 Twelve Data 시간봉으로
+빠진 시간대를 그 시간 정각 시세(시가)로 채운다. 이런 줄은 source가 twelvedata-1h.
 """
 import csv
 import json
@@ -144,19 +147,104 @@ def already_recorded_this_hour(now=None):
     return any(r["slot_kst"] == slot for r in read_rows())
 
 
+BACKFILL_SOURCE = "twelvedata-1h"
+BACKFILL_BARS = 120  # 최근 120개 시간봉 (시장이 열린 시간 기준 약 5일)
+SYMBOLS = {"usd": ("USD/KRW", 1), "jpy100": ("JPY/KRW", 100), "eur": ("EUR/KRW", 1)}
+
+
+def hourly_opens_twelvedata(api_key, symbol, outputsize=BACKFILL_BARS):
+    """시간봉의 시가(정각 시세)를 {'YYYY-MM-DD HH:00': 값} 으로 돌려준다 (한국시간)."""
+    query = urllib.parse.urlencode({
+        "symbol": symbol, "interval": "1h", "outputsize": outputsize,
+        "timezone": "Asia/Seoul", "dp": 6, "apikey": api_key,
+    })
+    data = http_json(f"https://api.twelvedata.com/time_series?{query}")
+    if data.get("status") == "error" or "values" not in data:
+        raise RuntimeError(f"Twelve Data {symbol} 시간봉 오류: {data.get('message')}")
+    out = {}
+    for bar in data["values"]:
+        dt = str(bar.get("datetime", ""))
+        if len(dt) < 13 or dt[13:16] not in ("", ":00"):
+            continue  # 정시 봉이 아니면 무시
+        out[dt[:13] + ":00"] = float(bar["open"])
+    return out
+
+
+def backfill(api_key, now=None, fetch_hourly=hourly_opens_twelvedata):
+    """빠진 시간대를 시간봉 시가(그 시간 정각 시세)로 채운다.
+    이미 있는 기록은 건드리지 않고, 세 통화가 모두 있는 시간대만 채운다.
+    시장이 닫힌 시간(주말)은 시간봉이 없으므로 채워지지 않는다."""
+    now = now or datetime.now(KST)
+    current = slot_of(now)
+    series = {key: fetch_hourly(api_key, sym) for key, (sym, _) in SYMBOLS.items()}
+    rows = read_rows()
+    have = {r["slot_kst"] for r in rows}
+    added = []
+    for slot in sorted(set.intersection(*(set(v) for v in series.values()))):
+        if slot in have or slot > current:
+            continue
+        rates = {key: series[key][slot] * mult for key, (_, mult) in SYMBOLS.items()}
+        rates["source"] = BACKFILL_SOURCE
+        try:
+            validate(rates)
+        except RuntimeError as e:
+            print(f"[warn] {slot} 보충 건너뜀 - {e}", file=sys.stderr)
+            continue
+        rows.append({
+            "slot_kst": slot,
+            "timestamp_kst": slot,  # 정각 시세
+            "usd": f"{rates['usd']:.2f}",
+            "jpy100": f"{rates['jpy100']:.2f}",
+            "eur": f"{rates['eur']:.2f}",
+            "source": BACKFILL_SOURCE,
+        })
+        added.append(slot)
+    if added:
+        rows.sort(key=lambda r: r["slot_kst"])
+        write_rows(rows)
+    return added
+
+
+def market_open(now=None):
+    """외환시장이 열려 있는 시간인지 (한국시간 월 07시 ~ 토 08시)"""
+    now = now or datetime.now(KST)
+    wd, h = now.weekday(), now.hour  # 월=0 ... 일=6
+    if wd == 5:
+        return h < 8
+    if wd == 6:
+        return False
+    if wd == 0:
+        return h >= 7
+    return True
+
+
 def main():
     force = os.environ.get("FORCE_COLLECT", "").lower() in ("1", "true")
+    api_key = os.environ.get("TWELVE_DATA_API_KEY", "").strip()
     if not force and already_recorded_this_hour():
         print("[skip] 이번 시간대는 이미 기록됨")
         return 0
-    try:
-        rates = fetch()
-    except Exception as e:
-        print(f"[error] 모든 출처에서 환율 수집 실패: {e}", file=sys.stderr)
-        return 1
-    row = save_rate(rates)
-    print(f"[ok] {row}")
-    return 0
+
+    status = 0
+    if not market_open():
+        # 주말에는 시세가 멈춰 있어 같은 값만 쌓이므로 기록하지 않는다 (늦게 돈 실행 대비)
+        print("[skip] 외환시장이 닫힌 시간이라 현재 시세는 기록하지 않음")
+    else:
+        try:
+            row = save_rate(fetch())
+            print(f"[ok] {row}")
+        except Exception as e:
+            print(f"[error] 모든 출처에서 환율 수집 실패: {e}", file=sys.stderr)
+            status = 1
+
+    # GitHub 예약 실행이 건너뛴 시간대 채우기 (실패해도 이번 기록에는 영향 없음)
+    if api_key:
+        try:
+            added = backfill(api_key)
+            print(f"[backfill] {len(added)}개 시간대 보충: {', '.join(a[5:13] for a in added) or '없음'}")
+        except Exception as e:
+            print(f"[warn] 빠진 시간대 보충 실패 - {e}", file=sys.stderr)
+    return status
 
 
 if __name__ == "__main__":

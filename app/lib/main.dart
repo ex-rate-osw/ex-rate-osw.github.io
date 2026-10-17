@@ -159,7 +159,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   Text(
                     last == null
                         ? '기록 없음'
-                        : '마지막 기록 ${last.date} ${last.hourLabel} (${last.collectedAt} 수집, KST)',
+                        : '마지막 기록 ${last.date} ${last.hourLabel} (${last.howCollected}, KST)',
                     style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
                   if (_checkedAt != null)

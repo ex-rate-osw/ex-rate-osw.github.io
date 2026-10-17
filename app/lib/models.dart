@@ -56,6 +56,12 @@ class RateRecord {
   /// 실제 수집 시각 '13:43'
   String get collectedAt => ts.substring(11, 16);
 
+  /// 빠진 시간대를 시간봉 시가(정각 시세)로 채운 기록인지
+  bool get isBackfilled => source == 'twelvedata-1h';
+
+  /// '13:43 수집' 또는 '정각 시세로 보충'
+  String get howCollected => isBackfilled ? '정각 시세로 보충' : '$collectedAt 수집';
+
   /// 기록끼리 시간 차이를 계산하는 용도 (모두 KST라 타임존 변환 불필요)
   DateTime get time => DateTime.parse(slot.replaceFirst(' ', 'T'));
 

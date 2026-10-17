@@ -117,6 +117,8 @@ let chart = null;
 
 const fmt = n => n.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const slotHour = r => `${+r.slot.slice(11, 13)}시`;
+// 빠진 시간대를 시간봉으로 채운 기록인지에 따라 '13:43 수집' / '정각 시세로 보충'
+const howCollected = r => r.source === 'twelvedata-1h' ? '정각 시세로 보충' : `${r.ts.slice(11, 16)} 수집`;
 const toDate = ts => new Date(ts.replace(' ', 'T') + ':00+09:00'); // 기록은 항상 KST
 
 function parseCsv(text) {
@@ -203,7 +205,7 @@ function renderChart() {
         legend: { display: false },
         tooltip: { callbacks: {
           title: items => { const r = data[items[0].dataIndex];
-            return `${r.slot.slice(5, 7)}/${r.slot.slice(8, 10)} ${slotHour(r)} 기록 (${r.ts.slice(11, 16)} 수집)`; },
+            return `${r.slot.slice(5, 7)}/${r.slot.slice(8, 10)} ${slotHour(r)} 기록 (${howCollected(r)})`; },
           label: ctx => ` ${fmt(ctx.parsed.y)}원`,
         } },
       },
@@ -250,7 +252,7 @@ fetch('data/rates.csv?t=' + Date.now())
     rows = parseCsv(text);
     const last = rows[rows.length - 1];
     document.getElementById('updated').textContent = last
-      ? `마지막 기록 ${last.slot.slice(0, 10)} ${slotHour(last)} (${last.ts.slice(11, 16)} 수집, KST)` : '기록 없음';
+      ? `마지막 기록 ${last.slot.slice(0, 10)} ${slotHour(last)} (${howCollected(last)}, KST)` : '기록 없음';
     render();
   })
   .catch(err => {

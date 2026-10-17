@@ -101,7 +101,7 @@ class RateChart extends StatelessWidget {
               getTooltipItems: (touched) => touched.map((s) {
                 final r = rows[s.x.round().clamp(0, rows.length - 1)];
                 return LineTooltipItem(
-                  '${r.slotLabel} 기록\n${formatNumber(s.y)}원 (${r.collectedAt} 수집)',
+                  '${r.slotLabel} 기록\n${formatNumber(s.y)}원 (${r.howCollected})',
                   TextStyle(color: scheme.onInverseSurface, fontSize: 12),
                 );
               }).toList(),

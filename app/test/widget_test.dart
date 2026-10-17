@@ -18,6 +18,7 @@ void main() {
     expect(rows.last.hourLabel, '10시');
     expect(rows.last.slotLabel, '10/15 10시');
     expect(rows.last.collectedAt, '10:58');
+    expect(rows.last.howCollected, '10:58 수집');
     expect(rows.first.value(Currency.jpy100), 850.0);
   });
 
@@ -25,6 +26,13 @@ void main() {
     final old = parseRatesCsv('timestamp_kst,usd,jpy100,eur,source\n2026-10-16 13:43,1348.2,851.9,1511.4,twelvedata\n');
     expect(old.single.slot, '2026-10-16 13:00');
     expect(old.single.hourLabel, '13시');
+  });
+
+  test('시간봉으로 채운 기록 표시', () {
+    final r = parseRatesCsv('slot_kst,timestamp_kst,usd,jpy100,eur,source\n'
+        '2026-10-16 14:00,2026-10-16 14:00,1340.1,859.0,1500.1,twelvedata-1h\n').single;
+    expect(r.isBackfilled, isTrue);
+    expect(r.howCollected, '정각 시세로 보충');
   });
 
   test('헤더만 있거나 깨진 줄은 무시한다', () {
