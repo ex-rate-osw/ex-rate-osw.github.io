@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'models.dart';
 import 'rate_chart.dart';
 import 'rates_repository.dart';
 
 void main() => runApp(const ExRateApp());
+
+const privacyPolicyUrl = 'https://ex-rate-osw.github.io/privacy.html';
 
 // 한국식 등락 색상: 상승 빨강, 하락 파랑
 const _upColor = Color(0xFFDC2626);
@@ -214,9 +217,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   for (final p in points.reversed) _PointTile(point: p, view: _view),
                   const SizedBox(height: 16),
                   Text(
-                    '매매기준율 기준 · 출처: 한국수출입은행\n영업일 오전 11시 전후 하루 1번 고시',
+                    '매매기준율 기준 · 출처: 한국수출입은행\n영업일 오전 11시 전후 하루 1번 고시 · 참고용이며 실제 거래 환율과 다를 수 있어요',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                  ),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => launchUrl(Uri.parse(privacyPolicyUrl), mode: LaunchMode.externalApplication),
+                      child: const Text('개인정보처리방침', style: TextStyle(fontSize: 12)),
+                    ),
                   ),
                 ],
               ),
