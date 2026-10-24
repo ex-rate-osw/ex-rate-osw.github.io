@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+<g transform="translate(512 512) scale(0.6) translate(-523 -496)">
+  
+  <!-- grid -->
+  <g stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="10">
+    <line x1="200" y1="420" x2="824" y2="420"/>
+    <line x1="200" y1="560" x2="824" y2="560"/>
+    <line x1="200" y1="700" x2="824" y2="700"/>
+  </g>
+  <!-- area + line -->
+  <path d="M200 690 L330 600 L450 650 L590 470 L700 520 L824 360 L824 780 L200 780 Z" fill="url(#area)"/>
+  <polyline points="200,690 330,600 450,650 590,470 700,520 824,360" fill="none" stroke="#FFFFFF" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="824" cy="360" r="46" fill="#FFFFFF"/>
+  <circle cx="824" cy="360" r="20" fill="#2563EB"/>
+  <!-- won coin -->
+  <circle cx="330" cy="330" r="118" fill="#FFFFFF"/>
+  <text x="330" y="330" text-anchor="middle" dominant-baseline="central" font-family="Noto Sans CJK KR, sans-serif" font-weight="800" font-size="150" fill="#1D4ED8">₩</text>
+</g></svg>

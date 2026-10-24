@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <g font-family="Noto Sans CJK KR, sans-serif" fill="#FFFFFF">
+    <text x="72" y="190" font-size="76" font-weight="800">환율 기록</text>
+    <text x="74" y="252" font-size="30" font-weight="500" fill-opacity="0.92">매일 고시 환율을 그래프로 한눈에</text>
+    <g font-size="22" font-weight="700">
+      <rect x="74" y="300" width="92" height="44" rx="22" fill="#FFFFFF" fill-opacity="0.18"/>
+      <text x="120" y="329" text-anchor="middle">USD</text>
+      <rect x="178" y="300" width="92" height="44" rx="22" fill="#FFFFFF" fill-opacity="0.18"/>
+      <text x="224" y="329" text-anchor="middle">JPY</text>
+      <rect x="282" y="300" width="92" height="44" rx="22" fill="#FFFFFF" fill-opacity="0.18"/>
+      <text x="328" y="329" text-anchor="middle">EUR</text>
+      <rect x="386" y="300" width="120" height="44" rx="22" fill="#FFFFFF" fill-opacity="0.18"/>
+      <text x="446" y="329" text-anchor="middle">+19개</text>
+    </g>
+    <text x="74" y="400" font-size="20" fill-opacity="0.75">일별 · 주별 · 월별 추이 | 출처: 한국수출입은행</text>
+  </g>
+  <g transform="translate(560 70)">
+    <rect x="0" y="0" width="400" height="360" rx="28" fill="#FFFFFF" fill-opacity="0.12"/>
+    <g stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="3">
+      <line x1="36" y1="120" x2="364" y2="120"/><line x1="36" y1="200" x2="364" y2="200"/><line x1="36" y1="280" x2="364" y2="280"/>
+    </g>
+    <path d="M36 270 L100 220 L160 245 L230 150 L290 180 L364 92 L364 320 L36 320 Z" fill="url(#area)"/>
+    <polyline points="36,270 100,220 160,245 230,150 290,180 364,92" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="364" cy="92" r="14" fill="#FFFFFF"/><circle cx="364" cy="92" r="6" fill="#2563EB"/>
+    <text x="36" y="64" font-family="Noto Sans CJK KR, sans-serif" font-size="22" fill="#FFFFFF" fill-opacity="0.8">미국 달러 · USD 1</text>
+  </g>
+</svg>
