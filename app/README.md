@@ -1,6 +1,6 @@
 # 환율 기록 앱 (Flutter)
 
-https://ex-rate-osw.github.io/data/daily.csv 에 쌓이는 한국수출입은행 일별 고시 환율(23개 통화)을 읽어 매매기준율, 송금 보낼 때/받을 때 환율, 일별·주별·월별 추이 그래프와 기록을 보여주는 Android / iOS 앱입니다.
+https://ex-rate.ohsangplay.com/data/daily.csv 에 쌓이는 한국수출입은행 일별 고시 환율(23개 통화)을 읽어 매매기준율, 송금 보낼 때/받을 때 환율, 일별·주별·월별 추이 그래프와 기록을 보여주는 Android / iOS 앱입니다.
 
 ```
 lib/main.dart              화면 (통화 칩, 요약 카드, 일·주·월 전환, 그래프, 기록 목록)

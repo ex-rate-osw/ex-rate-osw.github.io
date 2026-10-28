@@ -58,7 +58,7 @@ https://appstoreconnect.apple.com/apps → **+ → 신규 앱**
 | 카테고리 | 기본: **금융** / 보조: **유틸리티** |
 | 콘텐츠 권한 | "타사 콘텐츠를 포함하거나 표시하나요?" → **예**, "필요한 권한이 있음" 체크 (한국수출입은행 공공데이터, 이용허락범위 제한 없음) |
 | 연령 등급 | 설문 전부 **없음 / 아니요** → 4+ |
-| 개인정보 처리방침 URL | `https://ex-rate-osw.github.io/privacy.html` |
+| 개인정보 처리방침 URL | `https://ex-rate.ohsangplay.com/privacy.html` |
 
 ## 4. 앱 개인정보 보호
 
@@ -119,8 +119,8 @@ https://appstoreconnect.apple.com/apps → **+ → 신규 앱**
 
 | 칸 | 값 |
 |---|---|
-| 지원 URL | `https://ex-rate-osw.github.io/privacy.html#contact` |
-| 마케팅 URL | `https://ex-rate-osw.github.io/` |
+| 지원 URL | `https://ex-rate.ohsangplay.com/privacy.html#contact` |
+| 마케팅 URL | `https://ex-rate.ohsangplay.com/` |
 | 빌드 | 7단계에서 업로드한 빌드 선택 |
 | 저작권 | `2026 오상원` (개인 계정이면 본인 이름) |
 | 버전 출시 | 이 버전을 수동으로 출시 (심사 통과 후 원하는 때 출시) |

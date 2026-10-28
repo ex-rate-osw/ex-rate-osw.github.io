@@ -8,9 +8,9 @@
 |---|---|
 | 개발자(판매자) | 오상플레이 |
 | 연락처 이메일 | dkwkehd2@gmail.com |
-| 개인정보처리방침 URL | https://ex-rate-osw.github.io/privacy.html |
-| 지원(Support) URL | https://ex-rate-osw.github.io/privacy.html#contact |
-| 마케팅/웹사이트 URL | https://ex-rate-osw.github.io/ |
+| 개인정보처리방침 URL | https://ex-rate.ohsangplay.com/privacy.html |
+| 지원(Support) URL | https://ex-rate.ohsangplay.com/privacy.html#contact |
+| 마케팅/웹사이트 URL | https://ex-rate.ohsangplay.com/ |
 | 가격 | 무료 · 광고 없음 · 인앱 결제 없음 |
 | 카테고리 | Google Play: 금융 / App Store: 금융 (보조: 유틸리티) |
 | 연령 등급 | 전체이용가 (Google Play 설문: 폭력·성인·도박 등 모두 "아니요") / App Store 4+ |

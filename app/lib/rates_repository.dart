@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'models.dart';
 
 /// GitHub Pages에 올라가 있는 일별 수집 데이터 (출처: 한국수출입은행)
-const ratesCsvUrl = 'https://ex-rate-osw.github.io/data/daily.csv';
+const ratesCsvUrl = 'https://ex-rate.ohsangplay.com/data/daily.csv';
 
 Future<RatesData> fetchRates({http.Client? client}) async {
   final c = client ?? http.Client();

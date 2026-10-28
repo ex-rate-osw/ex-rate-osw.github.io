@@ -9,7 +9,7 @@ import 'rates_repository.dart';
 
 void main() => runApp(const ExRateApp());
 
-const privacyPolicyUrl = 'https://ex-rate-osw.github.io/privacy.html';
+const privacyPolicyUrl = 'https://ex-rate.ohsangplay.com/privacy.html';
 
 // 한국식 등락 색상: 상승 빨강, 하락 파랑
 const _upColor = Color(0xFFDC2626);
