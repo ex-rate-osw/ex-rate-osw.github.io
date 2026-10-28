@@ -36,6 +36,16 @@ void main() {
 
   Future<void> chip(WidgetTester tester, String label) async {
     final f = find.text(label);
+    // 가로 통화 칩 목록은 화면 밖 칩을 만들지 않으므로, 안 보이면 칩 목록을 스크롤해서 찾는다
+    final chips = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.right);
+    for (var i = 0; i < 8 && f.evaluate().isEmpty; i++) {
+      await tester.drag(chips.first, const Offset(300, 0)); // 앞쪽으로
+      await wait(tester, 300);
+    }
+    for (var i = 0; i < 12 && f.evaluate().isEmpty; i++) {
+      await tester.drag(chips.first, const Offset(-300, 0)); // 뒤쪽으로
+      await wait(tester, 300);
+    }
     await tester.ensureVisible(f);
     await wait(tester, 300);
     await tester.tap(f);
