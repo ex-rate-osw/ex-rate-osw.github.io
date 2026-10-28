@@ -61,13 +61,22 @@ jobs:
           xcrun simctl spawn "$UDID" defaults write -g AppleLocale ko_KR
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
+      - name: 코드 점검
+        working-directory: app
+        run: |
+          set -o pipefail
+          report() { msg=$(grep -v '^\s*$' "$2" | tail -n 45 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}'); echo "::error title=$1::$msg"; }
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee analyze.log || { report "flutter analyze" analyze.log; exit 1; }
+
       - name: 앱 실행해서 촬영
         working-directory: app
         run: |
+          set -o pipefail
+          report() { msg=$(grep -v '^\s*$' "$2" | tail -n 45 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}'); echo "::error title=$1::$msg"; }
           flutter drive \
             --driver=test_driver/integration_test.dart \
             --target=integration_test/screenshots_test.dart \
-            -d "${{ steps.sim.outputs.udid }}"
+            -d "${{ steps.sim.outputs.udid }}" 2>&1 | tee drive.log || { report "flutter drive" drive.log; exit 1; }
           ls -la screenshots
           sips -g pixelWidth -g pixelHeight screenshots/*.png
 
