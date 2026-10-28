@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   screenshots:
-    runs-on: macos-15   # 스크린샷은 최신 Xcode가 필요 없어서 대기열이 짧은 환경 사용
+    runs-on: macos-15-intel   # Apple 칩 macOS 대기열이 밀릴 때를 피해 Intel 환경 사용 (스크린샷은 최신 Xcode 불필요)
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
