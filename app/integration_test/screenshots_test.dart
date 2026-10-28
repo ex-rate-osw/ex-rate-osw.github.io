@@ -34,10 +34,15 @@ void main() {
     await binding.takeScreenshot(name);
   }
 
-  Future<void> toTop(WidgetTester tester) async {
-    await tester.fling(find.byType(ListView).first, const Offset(0, 3000), 3000);
-    await wait(tester, 1200);
+  // 바깥 목록의 스크롤 위치를 직접 지정 (손가락으로 끌면 그래프가 터치를 가져갈 수 있어서)
+  Future<void> scrollTo(WidgetTester tester, double offset) async {
+    final state = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    final pos = state.position;
+    pos.jumpTo(offset.clamp(pos.minScrollExtent, pos.maxScrollExtent));
+    await wait(tester, 900);
   }
+
+  Future<void> toTop(WidgetTester tester) => scrollTo(tester, 0);
 
   Future<void> chip(WidgetTester tester, String label) async {
     final f = find.text(label);
@@ -93,8 +98,7 @@ void main() {
     // 04 미국 달러 · 일별 · 아래로 스크롤해 기록 목록
     await chip(tester, '미국 달러 USD');
     await view(tester, '일별');
-    await tester.drag(find.byType(ListView).first, const Offset(0, -900));
-    await wait(tester, 1200);
+    await scrollTo(tester, 900);
     await shot('04');
 
     // 05 다크 모드 · 미국 달러 · 일별 · 맨 위
