@@ -7,6 +7,7 @@
   python frame_screenshots.py                 # raw/01.png ~ 05.png → out/screenshots/...
   python frame_screenshots.py --raw 내폴더     # 캡처 폴더 지정
   python frame_screenshots.py --crop-top 70   # 안드로이드 상태바(위쪽 70px) 잘라내기
+  python frame_screenshots.py --mask          # 날짜·시각·환율 숫자를 모자이크 (raw/NN.json 필요)
 
 입력: raw/01.png, raw/02.png ... (에뮬레이터·실기기 세로 캡처, 크기 무관)
 출력:
@@ -16,6 +17,7 @@
 캡션은 아래 CAPTIONS에서 바꿀 수 있다.
 """
 import argparse
+import json
 import os
 import sys
 
@@ -87,7 +89,62 @@ def rounded(img, radius):
     return out, mask
 
 
-def frame(raw_path, title, sub, size, crop_top=0):
+def pixelate(img, box, block):
+    """box 영역을 모자이크한다."""
+    l, t, r, b = [int(round(v)) for v in box]
+    l, t = max(l, 0), max(t, 0)
+    r, b = min(r, img.width), min(b, img.height)
+    if r - l < 2 or b - t < 2:
+        return
+    region = img.crop((l, t, r, b))
+    small = region.resize((max(1, (r - l) // block), max(1, (b - t) // block)), Image.BOX)
+    img.paste(small.resize(region.size, Image.NEAREST), (l, t))
+
+
+def find_tooltip(img):
+    """라이트 모드 그래프 툴팁(어두운 상자)의 위치를 이미지에서 찾는다."""
+    w, h = img.size
+    px = img.convert("RGB").load()
+    step = 2
+    rows = []
+    for y in range(int(h * 0.2), int(h * 0.95), step):
+        dark = sum(1 for x in range(0, w, step) if max(px[x, y]) < 75)
+        if dark * step > w * 0.18:
+            rows.append(y)
+    if not rows:
+        return None
+    # 가장 긴 연속 구간을 툴팁으로 본다
+    best, cur = [rows[0]], [rows[0]]
+    for y in rows[1:]:
+        cur = cur + [y] if y - cur[-1] <= step * 3 else [y]
+        if len(cur) > len(best):
+            best = cur
+    top, bottom = best[0], best[-1]
+    mid = (top + bottom) // 2
+    cols = [x for x in range(0, w, step) if max(px[x, mid]) < 75]
+    return (min(cols), top, max(cols), bottom) if cols else None
+
+
+def mask_sensitive(img, meta_path):
+    """촬영 때 기록한 위치(NN.json)의 날짜·시각·금액을 모자이크한다."""
+    with open(meta_path, encoding="utf-8") as f:
+        meta = json.load(f)
+    rects = meta.get("rects", [])
+    width = float(meta.get("width") or img.width)
+    # 위치가 논리 픽셀이면 이미지 배율로 키우고, 이미 물리 픽셀이면 그대로
+    scale = 1.0 if any(r["r"] > width + 5 for r in rects) else img.width / width
+    pad = 3 * scale
+    block = max(8, round(img.width / 70))
+    for r in rects:
+        pixelate(img, (r["l"] * scale - pad, r["t"] * scale - pad, r["r"] * scale + pad, r["b"] * scale + pad), block)
+    if meta.get("tooltip") and not meta.get("dark"):
+        box = find_tooltip(img)
+        if box:
+            pixelate(img, (box[0] + 6, box[1] + 6, box[2] - 6, box[3] - 6), block)
+    return len(rects)
+
+
+def frame(raw_path, title, sub, size, crop_top=0, mask=False):
     W, H = size
     canvas = gradient(W, H).convert("RGBA")
     draw = ImageDraw.Draw(canvas)
@@ -102,6 +159,11 @@ def frame(raw_path, title, sub, size, crop_top=0):
 
     # 앱 화면: 가로 84% 폭, 아래쪽은 살짝 잘려 나가게 배치
     shot = Image.open(raw_path).convert("RGB")
+    if mask:
+        meta_path = os.path.splitext(raw_path)[0] + ".json"
+        if not os.path.exists(meta_path):
+            sys.exit(f"{meta_path}가 없어 모자이크할 위치를 알 수 없어요 (iOS 스크린샷 워크플로로 찍은 캡처에만 있음)")
+        mask_sensitive(shot, meta_path)
     if crop_top:
         shot = shot.crop((0, crop_top, shot.width, shot.height))  # 상태바 잘라내기
     y = round(H * 0.22)
@@ -137,6 +199,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(HERE, "out", "screenshots"))
     ap.add_argument("--crop-top", type=int, default=0,
                     help="캡처 위쪽에서 잘라낼 픽셀 수 (안드로이드 상태바 제거용, 예: 1080x2400 기기는 약 70)")
+    ap.add_argument("--mask", action="store_true", help="날짜·시각·환율 숫자를 모자이크 (raw/NN.json 필요)")
     args = ap.parse_args()
 
     raws = sorted(f for f in os.listdir(args.raw) if f.lower().endswith((".png", ".jpg", ".jpeg")))
@@ -149,7 +212,7 @@ def main():
         os.makedirs(os.path.join(args.out, store), exist_ok=True)
         for i, name in enumerate(raws[: len(CAPTIONS)]):
             title, sub = CAPTIONS[i]
-            img = frame(os.path.join(args.raw, name), title, sub, size, args.crop_top)
+            img = frame(os.path.join(args.raw, name), title, sub, size, args.crop_top, args.mask)
             dst = os.path.join(args.out, store, f"{i + 1:02d}.png")
             img.save(dst, optimize=True)
             print(f"[ok] {dst} {img.size[0]}x{img.size[1]}")

@@ -5,6 +5,7 @@
 import 'package:ex_rate_app/main.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -30,10 +31,54 @@ void main() {
     throw TestFailure('화면을 기다리다 시간 초과: $finder');
   }
 
+  // 모자이크할 글자: 날짜·시각·금액·등락률·그래프 눈금 숫자
+  final sensitive = RegExp(
+    r'\d{4}-\d{2}-\d{2}'          // 2026-10-28
+    r'|\d{4}년 \d{1,2}월'          // 2026년 10월
+    r'|\d{1,2}:\d{2}'              // 13:34
+    r'|\d{1,2}/\d{1,2}주?'         // 10/7, 11/3주
+    r'|[+-]?[\d,]+\.\d+%?'        // 1,324.30 / 0.13% / 25.09
+    r'|^\s*[\d,]{3,}\s*$',       // 그래프 눈금 1,450 / 950
+  );
+
+  // 화면에 보이는 글자 중 sensitive에 해당하는 부분의 위치(논리 픽셀)
+  List<Map<String, double>> sensitiveRects(WidgetTester tester) {
+    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final screen = Offset.zero & size;
+    final rects = <Map<String, double>>[];
+    for (final e in find.byType(RichText).evaluate()) {
+      final rp = e.renderObject;
+      if (rp is! RenderParagraph || !rp.attached || !rp.hasSize) continue;
+      final text = rp.text.toPlainText();
+      for (final m in sensitive.allMatches(text)) {
+        var start = m.start, end = m.end;
+        while (start < end && text[start] == ' ') start++;
+        while (end > start && text[end - 1] == ' ') end--;
+        if (start >= end) continue;
+        final boxes = rp.getBoxesForSelection(TextSelection(baseOffset: start, extentOffset: end));
+        final transform = rp.getTransformTo(null);
+        for (final b in boxes) {
+          final r = MatrixUtils.transformRect(transform, b.toRect());
+          if (!r.overlaps(screen)) continue;
+          rects.add({'l': r.left, 't': r.top, 'r': r.right, 'b': r.bottom});
+        }
+      }
+    }
+    return rects;
+  }
+
   // 테스트가 누른 자리에 잠깐 그려지는 터치 표시가 사라진 뒤에 찍는다 (hold: 누른 채로 찍을 때)
-  Future<void> shot(WidgetTester tester, String name, {bool hold = false}) async {
+  // tooltip: 그래프 툴팁(캔버스에 그려져 위치를 알 수 없음)은 이미지에서 찾아 가리도록 표시
+  Future<void> shot(WidgetTester tester, String name, {bool hold = false, bool tooltip = false}) async {
     if (!hold) await wait(tester, 2500);
-    await binding.takeScreenshot(name);
+    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+    await binding.takeScreenshot(name, {
+      'width': size.width,
+      'height': size.height,
+      'rects': sensitiveRects(tester),
+      'tooltip': tooltip,
+      'dark': tester.platformDispatcher.platformBrightness == Brightness.dark,
+    });
   }
 
   // 바깥 목록의 스크롤 위치를 직접 지정 (손가락으로 끌면 그래프가 터치를 가져갈 수 있어서)
@@ -88,7 +133,7 @@ void main() {
     final chart = tester.getRect(find.byType(LineChart));
     final gesture = await tester.startGesture(Offset(chart.left + chart.width * 0.62, chart.center.dy));
     await wait(tester, 700);
-    await shot(tester, '02', hold: true);
+    await shot(tester, '02', hold: true, tooltip: true);
     await gesture.up();
     await wait(tester, 500);
 

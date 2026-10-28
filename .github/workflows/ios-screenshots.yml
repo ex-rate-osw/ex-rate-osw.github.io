@@ -3,7 +3,8 @@ name: iOS 스크린샷 생성
 # iPhone (Dynamic Island 지원, 중형 디스플레이) 시뮬레이터에서 앱을 띄워 스토어용 화면 5장을 자동으로 찍고,
 # 캡션을 입힌 App Store(1206×2622)·Google Play(1080×1920) 이미지를 저장소에 커밋한다.
 #   원본: store-assets/raw-ios/01~05.png
-#   결과: store-assets/out/screenshots/appstore/, store-assets/out/screenshots/play/
+#   결과: store-assets/out/screenshots/{appstore,appstore-1179x2556,play}/  (날짜·환율 숫자 모자이크)
+#         store-assets/out/screenshots-original/...                     (모자이크 없음)
 
 on:
   workflow_dispatch:
@@ -83,16 +84,19 @@ jobs:
       - name: 캡션 입히기
         run: |
           rm -rf store-assets/raw-ios && mkdir -p store-assets/raw-ios
-          cp app/screenshots/*.png store-assets/raw-ios/
+          cp app/screenshots/*.png app/screenshots/*.json store-assets/raw-ios/
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -q pillow
-          "$RUNNER_TEMP/venv/bin/python" store-assets/frame_screenshots.py --raw store-assets/raw-ios
+          # 날짜·시각·환율 숫자를 모자이크한 버전 (기본)
+          "$RUNNER_TEMP/venv/bin/python" store-assets/frame_screenshots.py --raw store-assets/raw-ios --mask
+          # 모자이크 없는 원본 버전
+          "$RUNNER_TEMP/venv/bin/python" store-assets/frame_screenshots.py --raw store-assets/raw-ios --out store-assets/out/screenshots-original
 
       - name: 커밋
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add store-assets/raw-ios store-assets/out/screenshots
+          git add store-assets/raw-ios store-assets/out/screenshots store-assets/out/screenshots-original
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "store: iOS 시뮬레이터 스크린샷 갱신"
           git pull --rebase
