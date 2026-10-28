@@ -129,7 +129,7 @@ jobs:
           ls -la build/ios/ipa
 
       - name: ipa 보관 (Actions 실행 화면에서 내려받기)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ex-rate-ios-${{ github.run_number }}
           path: app/build/ios/ipa/*.ipa
