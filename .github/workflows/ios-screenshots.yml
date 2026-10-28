@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   screenshots:
-    runs-on: macos-26
+    runs-on: macos-15   # 스크린샷은 최신 Xcode가 필요 없어서 대기열이 짧은 환경 사용
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
