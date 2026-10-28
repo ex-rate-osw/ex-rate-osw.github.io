@@ -136,7 +136,10 @@ def mask_sensitive(img, meta_path):
     pad = 3 * scale
     block = max(8, round(img.width / 70))
     for r in rects:
-        pixelate(img, (r["l"] * scale - pad, r["t"] * scale - pad, r["r"] * scale + pad, r["b"] * scale + pad), block)
+        # 큰 글자는 모자이크 칸도 크게 (글자 높이의 절반 정도면 읽히지 않음)
+        h = (r["b"] - r["t"]) * scale
+        pixelate(img, (r["l"] * scale - pad, r["t"] * scale - pad, r["r"] * scale + pad, r["b"] * scale + pad),
+                 max(block, round(h / 2)))
     if meta.get("tooltip") and not meta.get("dark"):
         box = find_tooltip(img)
         if box:

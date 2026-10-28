@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   screenshots:
-    runs-on: macos-15-intel   # Apple 칩 macOS 대기열이 밀릴 때를 피해 Intel 환경 사용 (스크린샷은 최신 Xcode 불필요)
+    runs-on: macos-26   # Intel 환경(macos-15-intel)은 화면 캡처가 빈 파일로 나와서 Apple 칩 환경 사용
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -79,6 +79,7 @@ jobs:
             --target=integration_test/screenshots_test.dart \
             -d "${{ steps.sim.outputs.udid }}" 2>&1 | tee drive.log || { report "flutter drive" drive.log; exit 1; }
           ls -la screenshots
+          for f in screenshots/*.png; do [ -s "$f" ] || { echo "::error title=빈 캡처::$f 가 0바이트예요"; exit 1; }; done
           sips -g pixelWidth -g pixelHeight screenshots/*.png
 
       - name: 촬영 원본 저장 (캡션 단계가 실패해도 원본은 남김)
