@@ -30,7 +30,9 @@ void main() {
     throw TestFailure('화면을 기다리다 시간 초과: $finder');
   }
 
-  Future<void> shot(String name) async {
+  // 테스트가 누른 자리에 잠깐 그려지는 터치 표시가 사라진 뒤에 찍는다 (hold: 누른 채로 찍을 때)
+  Future<void> shot(WidgetTester tester, String name, {bool hold = false}) async {
+    if (!hold) await wait(tester, 2500);
     await binding.takeScreenshot(name);
   }
 
@@ -78,7 +80,7 @@ void main() {
     // 01 미국 달러 · 일별 · 맨 위
     await chip(tester, '미국 달러 USD');
     await view(tester, '일별');
-    await shot('01');
+    await shot(tester, '01');
 
     // 02 일본 옌 · 주별 · 그래프 툴팁 (손가락을 누른 채로 촬영)
     await chip(tester, '일본 옌 JPY');
@@ -86,26 +88,26 @@ void main() {
     final chart = tester.getRect(find.byType(LineChart));
     final gesture = await tester.startGesture(Offset(chart.left + chart.width * 0.62, chart.center.dy));
     await wait(tester, 700);
-    await shot('02');
+    await shot(tester, '02', hold: true);
     await gesture.up();
     await wait(tester, 500);
 
     // 03 유로 · 월별
     await chip(tester, '유로 EUR');
     await view(tester, '월별');
-    await shot('03');
+    await shot(tester, '03');
 
     // 04 미국 달러 · 일별 · 아래로 스크롤해 기록 목록
     await chip(tester, '미국 달러 USD');
     await view(tester, '일별');
     await scrollTo(tester, 900);
-    await shot('04');
+    await shot(tester, '04');
 
     // 05 다크 모드 · 미국 달러 · 일별 · 맨 위
     await toTop(tester);
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     await wait(tester, 1200);
-    await shot('05');
+    await shot(tester, '05');
 
     tester.platformDispatcher.clearPlatformBrightnessTestValue();
     await tester.pumpWidget(const SizedBox()); // 자동 갱신 타이머 정리
