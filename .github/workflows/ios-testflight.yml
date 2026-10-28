@@ -1,0 +1,122 @@
+name: iOS 빌드 → TestFlight 업로드
+
+# Mac 없이 GitHub의 macOS 실행 환경에서 iOS 앱을 빌드하고 App Store Connect에 올린다.
+# Actions 탭 → "iOS 빌드 → TestFlight 업로드" → Run workflow 로 수동 실행.
+#
+# 필요한 저장소 Secrets (Settings → Secrets and variables → Actions)
+#   APPLE_TEAM_ID         Apple Developer 팀 ID (10자리)
+#   ASC_KEY_ID            App Store Connect API 키 ID
+#   ASC_ISSUER_ID         App Store Connect API 발급자(Issuer) ID
+#   ASC_KEY_P8_BASE64     내려받은 AuthKey_XXXX.p8 파일을 base64로 바꾼 값
+# API 키는 "관리자(Admin)" 역할로 만들어야 클라우드 서명(인증서 자동 관리)이 된다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "App Store Connect에 업로드 (끄면 빌드만 하고 ipa를 아티팩트로 저장)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Secrets 확인
+        run: |
+          missing=""
+          for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID; do [ -n "${!v}" ] || missing="$missing $v"; done
+          [ -n "${{ secrets.ASC_KEY_P8_BASE64 }}" ] || missing="$missing ASC_KEY_P8_BASE64"
+          if [ -n "$missing" ]; then echo "::error::저장소 Secrets가 없습니다:$missing"; exit 1; fi
+          xcodebuild -version
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 플랫폼 폴더 생성·설정 (번들 ID, 이름, 아이콘)
+        run: bash setup_platforms.sh
+
+      - name: 테스트
+        run: flutter test
+
+      - name: API 키 설치
+        run: |
+          mkdir -p ~/private_keys
+          echo "${{ secrets.ASC_KEY_P8_BASE64 }}" | base64 --decode > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Flutter 빌드 (서명 없이)
+        run: |
+          # 빌드 번호는 실행 번호로 (업로드할 때마다 달라야 함). 버전 이름은 pubspec.yaml의 version 앞부분.
+          flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/ios/Runner.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: 서명해서 ipa 만들기 (클라우드 서명)
+        run: |
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/ios/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "${ASC_KEY_ID}" \
+            -authenticationKeyIssuerID "${ASC_ISSUER_ID}"
+          ls -la build/ios/ipa
+
+      - name: ipa 보관 (Actions 실행 화면에서 내려받기)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ex-rate-ios-${{ github.run_number }}
+          path: app/build/ios/ipa/*.ipa
+          retention-days: 14
+
+      - name: App Store Connect 업로드
+        if: ${{ inputs.upload }}
+        run: |
+          IPA=$(ls build/ios/ipa/*.ipa | head -1)
+          xcrun altool --upload-app --type ios -f "$IPA" \
+            --apiKey "${ASC_KEY_ID}" --apiIssuer "${ASC_ISSUER_ID}"
+          echo "업로드 완료. App Store Connect → TestFlight에서 처리(10~30분) 후 확인하세요."
+
+      - name: API 키 삭제
+        if: always()
+        run: rm -rf ~/private_keys
