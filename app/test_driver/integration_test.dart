@@ -14,7 +14,7 @@ Future<void> main() async {
       return true;
     },
     responseDataCallback: (Map<String, dynamic>? data) async {
-      final shots = data?['screenshots'];
+      final shots = data?['shot_meta'];
       if (shots is Map) {
         for (final entry in shots.entries) {
           final file = File('screenshots/${entry.key}.json');

@@ -161,6 +161,6 @@ void main() {
 
     tester.platformDispatcher.clearPlatformBrightnessTestValue();
     await tester.pumpWidget(const SizedBox()); // 자동 갱신 타이머 정리
-    binding.reportData = {'screenshots': meta};
+    binding.reportData = {'shot_meta': meta}; // 'screenshots'는 integration_test가 내부에서 쓰는 키라 피함
   });
 }
