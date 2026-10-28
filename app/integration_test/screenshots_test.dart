@@ -34,6 +34,11 @@ void main() {
     await binding.takeScreenshot(name);
   }
 
+  Future<void> toTop(WidgetTester tester) async {
+    await tester.fling(find.byType(ListView).first, const Offset(0, 3000), 3000);
+    await wait(tester, 1200);
+  }
+
   Future<void> chip(WidgetTester tester, String label) async {
     final f = find.text(label);
     // 가로 통화 칩 목록은 화면 밖 칩을 만들지 않으므로, 안 보이면 칩 목록을 스크롤해서 찾는다
@@ -50,16 +55,12 @@ void main() {
     await wait(tester, 300);
     await tester.tap(f);
     await wait(tester);
+    await toTop(tester); // ensureVisible이 바깥 목록까지 내려서, 화면 맨 위로 되돌린다
   }
 
   Future<void> view(WidgetTester tester, String label) async {
     await tester.tap(find.text(label));
     await wait(tester);
-  }
-
-  Future<void> toTop(WidgetTester tester) async {
-    await tester.fling(find.byType(ListView).first, const Offset(0, 3000), 3000);
-    await wait(tester, 1200);
   }
 
   testWidgets('store screenshots', (tester) async {

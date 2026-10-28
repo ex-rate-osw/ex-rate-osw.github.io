@@ -84,6 +84,8 @@ class RateChart extends StatelessWidget {
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (_) => scheme.inverseSurface,
               fitInsideHorizontally: true,
+              maxContentWidth: 240,
+              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               fitInsideVertically: true,
               getTooltipItems: (touched) => touched.map((s) {
                 final p = points[s.x.round().clamp(0, points.length - 1)];
