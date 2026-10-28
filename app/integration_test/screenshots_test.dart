@@ -69,16 +69,21 @@ void main() {
 
   // 테스트가 누른 자리에 잠깐 그려지는 터치 표시가 사라진 뒤에 찍는다 (hold: 누른 채로 찍을 때)
   // tooltip: 그래프 툴팁(캔버스에 그려져 위치를 알 수 없음)은 이미지에서 찾아 가리도록 표시
+  // 장마다 모자이크 정보를 모았다가 테스트가 끝날 때 reportData로 한 번에 넘긴다
+  // (iOS에서는 takeScreenshot에 추가 정보를 함께 넘길 수 없음)
+  final meta = <String, Object?>{};
+
   Future<void> shot(WidgetTester tester, String name, {bool hold = false, bool tooltip = false}) async {
     if (!hold) await wait(tester, 2500);
     final size = tester.view.physicalSize / tester.view.devicePixelRatio;
-    await binding.takeScreenshot(name, {
+    meta[name] = {
       'width': size.width,
       'height': size.height,
       'rects': sensitiveRects(tester),
       'tooltip': tooltip,
       'dark': tester.platformDispatcher.platformBrightness == Brightness.dark,
-    });
+    };
+    await binding.takeScreenshot(name);
   }
 
   // 바깥 목록의 스크롤 위치를 직접 지정 (손가락으로 끌면 그래프가 터치를 가져갈 수 있어서)
@@ -156,5 +161,6 @@ void main() {
 
     tester.platformDispatcher.clearPlatformBrightnessTestValue();
     await tester.pumpWidget(const SizedBox()); // 자동 갱신 타이머 정리
+    binding.reportData = {'screenshots': meta};
   });
 }
