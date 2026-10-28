@@ -83,17 +83,23 @@ jobs:
 
       - name: 촬영 원본 저장 (캡션 단계가 실패해도 원본은 남김)
         run: |
-          ls -la app/screenshots
-          rm -rf store-assets/raw-ios && mkdir -p store-assets/raw-ios
-          cp app/screenshots/*.png store-assets/raw-ios/
-          cp app/screenshots/*.json store-assets/raw-ios/ 2>/dev/null || echo "::warning::모자이크 위치 정보(json)가 없어요"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add store-assets/raw-ios
-          if ! git diff --cached --quiet; then
-            git commit -m "store: iOS 시뮬레이터 촬영 원본 갱신"
-            git pull --rebase && git push
-          fi
+          set -o pipefail
+          {
+            set -ex
+            ls -la app/screenshots
+            rm -rf store-assets/raw-ios && mkdir -p store-assets/raw-ios
+            cp app/screenshots/*.png store-assets/raw-ios/
+            if ls app/screenshots/*.json >/dev/null 2>&1; then cp app/screenshots/*.json store-assets/raw-ios/; else echo "::warning::모자이크 위치 정보(json)가 없어요"; fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git status --short | head -30
+            git add store-assets/raw-ios
+            if ! git diff --cached --quiet; then
+              git commit -m "store: iOS 시뮬레이터 촬영 원본 갱신"
+              git pull --rebase --autostash
+              git push
+            fi
+          } 2>&1 | tee save.log || { msg=$(tail -n 40 save.log | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}'); echo "::error title=원본 저장::$msg"; exit 1; }
 
       - name: 캡션 입히기
         run: |
@@ -113,5 +119,5 @@ jobs:
           git add store-assets/raw-ios store-assets/out/screenshots store-assets/out/screenshots-original
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "store: iOS 시뮬레이터 스크린샷 갱신"
-          git pull --rebase
+          git pull --rebase --autostash
           git push
