@@ -1,0 +1,90 @@
+name: iOS 스크린샷 생성
+
+# 6.9형 iPhone 시뮬레이터에서 앱을 띄워 스토어용 화면 5장을 자동으로 찍고,
+# 캡션을 입힌 App Store(1290×2796)·Google Play(1080×1920) 이미지를 저장소에 커밋한다.
+#   원본: store-assets/raw-ios/01~05.png
+#   결과: store-assets/out/screenshots/appstore/, store-assets/out/screenshots/play/
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ios-screenshots.yml
+      - app/integration_test/**
+      - app/test_driver/**
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-screenshots
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 플랫폼 폴더 생성·설정
+        working-directory: app
+        run: bash setup_platforms.sh
+
+      - name: 6.9형 iPhone 시뮬레이터 부팅
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          devs = json.load(sys.stdin)["devices"]
+          cands = []
+          for rt, lst in devs.items():
+              m = re.search(r"iOS-(\d+)-(\d+)", rt)
+              if not m:
+                  continue
+              for d in lst:
+                  if "Pro Max" in d["name"]:
+                      num = re.search(r"iPhone (\d+)", d["name"])
+                      cands.append(((int(m.group(1)), int(m.group(2))), int(num.group(1)) if num else 0, d["name"], d["udid"]))
+          cands.sort()
+          print(cands[-1][3]); print(cands[-1][2], file=sys.stderr)
+          ')
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl spawn "$UDID" defaults write -g AppleLanguages -array ko
+          xcrun simctl spawn "$UDID" defaults write -g AppleLocale ko_KR
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: 앱 실행해서 촬영
+        working-directory: app
+        run: |
+          flutter drive \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/screenshots_test.dart \
+            -d "${{ steps.sim.outputs.udid }}"
+          ls -la screenshots
+          sips -g pixelWidth -g pixelHeight screenshots/*.png
+
+      - name: 캡션 입히기
+        run: |
+          rm -rf store-assets/raw-ios && mkdir -p store-assets/raw-ios
+          cp app/screenshots/*.png store-assets/raw-ios/
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -q pillow
+          "$RUNNER_TEMP/venv/bin/python" store-assets/frame_screenshots.py --raw store-assets/raw-ios
+
+      - name: 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add store-assets/raw-ios store-assets/out/screenshots
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "store: iOS 시뮬레이터 스크린샷 갱신"
+          git pull --rebase
+          git push
