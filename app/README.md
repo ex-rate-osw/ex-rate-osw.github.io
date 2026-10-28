@@ -25,12 +25,12 @@ flutter test
 
 스크립트가 해주는 일:
 - `flutter create`로 android/ios 폴더 생성 (없을 때만)
-- 앱 ID를 `com.ohsang.play.exrate`로 (iOS 번들 ID, Android applicationId)
+- 앱 ID를 `com.ohsang.util.exrate`로 (iOS 번들 ID, Android applicationId)
 - 앱 이름을 "환율 기록"으로, Android 인터넷 권한 추가
 - iOS를 iPhone 전용으로, 수출 규정(암호화) 항목 설정 (Info.plist 수정은 Mac/CI에서만 적용)
 - 앱 아이콘 생성 (`flutter_launcher_icons.yaml`, 원본은 `../store-assets/out/`)
 
-이미 예전 방식(`--org io.github.exrateosw`)으로 만든 폴더가 있으면, 스크립트를 다시 실행하면 앱 ID와 이름만 새 값으로 바뀌어요.
+이미 예전 앱 ID(`io.github.exrateosw`, `com.ohsang.play`)로 만든 폴더가 있으면, 스크립트를 다시 실행하면 앱 ID(안드로이드 namespace·MainActivity 위치 포함)와 이름이 새 값으로 바뀌어요.
 
 ## 폰에 설치
 

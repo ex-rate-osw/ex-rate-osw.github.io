@@ -5,12 +5,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_ID="com.ohsang.play.exrate"   # iOS 번들 ID / Android 패키지명
+APP_ID="com.ohsang.util.exrate"   # iOS 번들 ID / Android 패키지명(applicationId·namespace)
 APP_NAME="환율 기록"
 
 # 1) 플랫폼 폴더가 없으면 생성 (lib/, test/, pubspec.yaml은 건드리지 않음)
 if [ ! -d ios ] || [ ! -d android ]; then
-  flutter create --org com.ohsang.play --project-name ex_rate_app --platforms android,ios .
+  flutter create --org com.ohsang.util --project-name ex_rate_app --platforms android,ios .
   # flutter create는 이미 있는 파일을 덮어쓰지 않지만, 혹시 바뀌었으면 알려준다
   if ! git diff --quiet -- lib test pubspec.yaml 2>/dev/null; then
     echo "[주의] lib/, test/, pubspec.yaml에 변경이 있어요. git diff로 확인해 주세요."
@@ -21,8 +21,8 @@ fi
 PBX=ios/Runner.xcodeproj/project.pbxproj
 PLIST=ios/Runner/Info.plist
 if [ -f "$PBX" ]; then
-  # 번들 ID (flutter create 기본값 com.ohsang.play.exRateApp → com.ohsang.play.exrate)
-  sed -i.bak -E "s/PRODUCT_BUNDLE_IDENTIFIER = [A-Za-z0-9.]*exRateApp(\.RunnerTests)?;/PRODUCT_BUNDLE_IDENTIFIER = ${APP_ID}\1;/" "$PBX"
+  # 번들 ID (flutter create 기본값 ...exRateApp 또는 예전 값 → com.ohsang.util.exrate)
+  sed -i.bak -E "s/PRODUCT_BUNDLE_IDENTIFIER = [A-Za-z0-9._]*(exRateApp|exrate)(\.RunnerTests)?;/PRODUCT_BUNDLE_IDENTIFIER = ${APP_ID}\2;/" "$PBX"
   # iPhone 전용 (iPad 스크린샷 없이 제출)
   sed -i.bak -E 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = 1;/' "$PBX"
   rm -f "$PBX.bak"
@@ -45,10 +45,23 @@ if [ -f "$MANIFEST" ]; then
 fi
 for G in android/app/build.gradle.kts android/app/build.gradle; do
   if [ -f "$G" ]; then
-    # applicationId만 바꾼다 (namespace는 MainActivity 패키지와 맞아야 해서 그대로 둠)
-    APP_ID="$APP_ID" perl -pi -e 's/(applicationId\s*=?\s*)"[^"]*"/$1"$ENV{APP_ID}"/' "$G"
+    APP_ID="$APP_ID" perl -pi -e 's/(applicationId\s*=?\s*)"[^"]*"/$1"$ENV{APP_ID}"/; s/(namespace\s*=?\s*)"[^"]*"/$1"$ENV{APP_ID}"/' "$G"
   fi
 done
+# namespace를 바꿨으니 MainActivity도 같은 패키지로 옮긴다 (manifest의 ".MainActivity"가 namespace 기준)
+MAIN=$(find android/app/src/main -name 'MainActivity.kt' -o -name 'MainActivity.java' 2>/dev/null | head -1)
+if [ -n "$MAIN" ]; then
+  EXT="${MAIN##*.}"
+  DEST="android/app/src/main/$( [ "$EXT" = kt ] && echo kotlin || echo java )/$(echo "$APP_ID" | tr . /)/MainActivity.$EXT"
+  APP_ID="$APP_ID" perl -pi -e 's/^package\s+[\w.]+;?/package $ENV{APP_ID}/ if $. == 1 || /^package /' "$MAIN"
+  if [ "$EXT" = java ]; then perl -pi -e 's/^(package [\w.]+)$/$1;/' "$MAIN"; fi
+  if [ "$MAIN" != "$DEST" ]; then
+    mkdir -p "$(dirname "$DEST")"
+    mv "$MAIN" "$DEST"
+    # 비게 된 예전 패키지 폴더 정리
+    find android/app/src/main/kotlin android/app/src/main/java -type d -empty -delete 2>/dev/null || true
+  fi
+fi
 
 # 4) 아이콘
 flutter pub get
