@@ -73,7 +73,7 @@ https://appstoreconnect.apple.com/apps → **+ → 신규 앱**
 
 ## 6. 버전 1.0 (iOS 앱 → 1.0 준비 중)
 
-**스크린샷 · iPhone 6.9형** (1290×2796, 3~10장)
+**스크린샷 · iPhone iPhone** (1206×2622, 3~10장)
 `store-assets/out/screenshots/appstore/01~05.png`
 → 안드로이드 캡처로 만든 임시본이니, TestFlight로 아이폰에 설치한 뒤 아이폰에서 캡처해서 `raw/`에 넣고 `python frame_screenshots.py`를 다시 돌린 걸 올리는 게 안전해요.
 

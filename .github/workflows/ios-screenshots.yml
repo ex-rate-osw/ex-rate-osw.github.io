@@ -1,7 +1,7 @@
 name: iOS 스크린샷 생성
 
-# 6.9형 iPhone 시뮬레이터에서 앱을 띄워 스토어용 화면 5장을 자동으로 찍고,
-# 캡션을 입힌 App Store(1290×2796)·Google Play(1080×1920) 이미지를 저장소에 커밋한다.
+# iPhone (Dynamic Island 지원, 중형 디스플레이) 시뮬레이터에서 앱을 띄워 스토어용 화면 5장을 자동으로 찍고,
+# 캡션을 입힌 App Store(1206×2622)·Google Play(1080×1920) 이미지를 저장소에 커밋한다.
 #   원본: store-assets/raw-ios/01~05.png
 #   결과: store-assets/out/screenshots/appstore/, store-assets/out/screenshots/play/
 
@@ -37,7 +37,7 @@ jobs:
         working-directory: app
         run: bash setup_platforms.sh
 
-      - name: 6.9형 iPhone 시뮬레이터 부팅
+      - name: iPhone (Dynamic Island 지원, 중형 디스플레이) 시뮬레이터 부팅
         id: sim
         run: |
           UDID=$(xcrun simctl list devices available -j | python3 -c '

@@ -11,7 +11,8 @@
 입력: raw/01.png, raw/02.png ... (에뮬레이터·실기기 세로 캡처, 크기 무관)
 출력:
   out/screenshots/play/01.png ...      1080×1920 (Google Play 휴대폰)
-  out/screenshots/appstore/01.png ...  1290×2796 (App Store 6.9형 iPhone)
+  out/screenshots/appstore/01.png ...            1206×2622 (App Store iPhone)
+  out/screenshots/appstore-1179x2556/01.png ...  1179×2556 (App Store iPhone, 다른 허용 크기)
 캡션은 아래 CAPTIONS에서 바꿀 수 있다.
 """
 import argparse
@@ -32,7 +33,9 @@ CAPTIONS = [
 
 SIZES = {
     "play": (1080, 1920),
-    "appstore": (1290, 2796),
+    # App Store Connect "Dynamic Island 지원 iPhone (중형 디스플레이)" 칸이 받는 크기
+    "appstore": (1206, 2622),
+    "appstore-1179x2556": (1179, 2556),
 }
 
 TOP = (59, 130, 246)      # #3B82F6

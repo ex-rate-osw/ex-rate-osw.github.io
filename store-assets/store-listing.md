@@ -107,7 +107,7 @@
 | 앱 아이콘 | `out/play-icon-512.png` (512×512) | `out/icon-1024.png` (1024×1024, 투명도 없음) |
 | 앱 안 아이콘 | 적응형: `out/android-adaptive-foreground.png` + `out/android-adaptive-background.png` | Xcode에 `icon-1024.png` 한 장 |
 | 대표 이미지 | `out/play-feature-graphic-1024x500.png` (필수) | 없음 |
-| 휴대폰 스크린샷 | 2~8장, 1080×1920 (`frame_screenshots.py`가 생성) | 6.9형 1290×2796 (`frame_screenshots.py`가 생성) |
+| 휴대폰 스크린샷 | 2~8장, 1080×1920 (`frame_screenshots.py`가 생성) | iPhone 1206×2622 (`frame_screenshots.py`가 생성) |
 | 태블릿 스크린샷 | 선택 | iPad를 지원하면 13형 2064×2752 필요 → iPhone 전용으로 설정하면 불필요 |
 
 > Flutter 기본 iOS 설정은 iPad도 지원(TARGETED_DEVICE_FAMILY = 1,2)이라, iPad 스크린샷 없이 내려면 Xcode → Runner → General → Supported Destinations에서 iPad를 빼주세요.
