@@ -92,6 +92,7 @@ jobs:
           </dict>
           </plist>
           EOF
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath build/ios/Runner.xcarchive \
             -exportPath build/ios/ipa \
@@ -99,7 +100,16 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
             -authenticationKeyID "${ASC_KEY_ID}" \
-            -authenticationKeyIssuerID "${ASC_ISSUER_ID}"
+            -authenticationKeyIssuerID "${ASC_ISSUER_ID}" 2>&1 | tee export.log || {
+              msg=$(grep -iE "error|fail|signing|certificate|profile|provision|account|permission|team" export.log | tail -n 40 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}')
+              echo "::error title=exportArchive::$msg"
+              LOGDIR=$(grep -oE "/var/folders/[^ ]*\.xcdistributionlogs" export.log | head -1)
+              if [ -n "$LOGDIR" ] && [ -f "$LOGDIR/IDEDistribution.standard.log" ]; then
+                msg2=$(grep -iE "error|fail|denied|permission|certificate" "$LOGDIR/IDEDistribution.standard.log" | tail -n 30 | sed 's/%/%25/g' | awk '{printf "%s%%0A",$0}')
+                echo "::error title=distribution log::$msg2"
+              fi
+              exit 1
+            }
           ls -la build/ios/ipa
 
       - name: ipa 보관 (Actions 실행 화면에서 내려받기)
