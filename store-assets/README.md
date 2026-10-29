@@ -2,6 +2,8 @@
 
 ```
 store-listing.md        스토어 문구(이름, 설명, 키워드 등)와 등록 정보, 규격 정리
+appstore-guide.md       App Store Connect 칸별 입력값
+playstore-guide.md      Google Play Console 칸별 입력값 (업로드 키, 비공개 테스트, 출시)
 capture-prompt.md       에뮬레이터에서 스크린샷 5장을 캡처하는 VS Code Claude Code용 프롬프트
 frame_screenshots.py    캡처(raw/)에 캡션을 입혀 Play 1080×1920, App Store 1206×2622으로 만드는 스크립트
 out/
