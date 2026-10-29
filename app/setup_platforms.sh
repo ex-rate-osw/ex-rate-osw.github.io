@@ -48,6 +48,13 @@ for G in android/app/build.gradle.kts android/app/build.gradle; do
     APP_ID="$APP_ID" perl -pi -e 's/(applicationId\s*=?\s*)"[^"]*"/$1"$ENV{APP_ID}"/; s/(namespace\s*=?\s*)"[^"]*"/$1"$ENV{APP_ID}"/' "$G"
   fi
 done
+# 출시 서명: 환경변수 ANDROID_KEYSTORE_PATH 등이 있으면 업로드 키로, 없으면 디버그 키로 서명
+KTS=android/app/build.gradle.kts
+if [ -f "$KTS" ] && ! grep -q ANDROID_KEYSTORE_PATH "$KTS"; then
+  perl -0pi -e 's/\n([ \t]*)buildTypes \{/\n$1signingConfigs {\n$1    create("release") {\n$1        System.getenv("ANDROID_KEYSTORE_PATH")?.let { storeFile = file(it) }\n$1        storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")\n$1        keyAlias = System.getenv("ANDROID_KEY_ALIAS")\n$1        keyPassword = System.getenv("ANDROID_KEY_PASSWORD")\n$1    }\n$1}\n\n$1buildTypes {/' "$KTS"
+  perl -0pi -e 's/(release \{.*?)signingConfig = signingConfigs\.getByName\("debug"\)/$1signingConfig = if (System.getenv("ANDROID_KEYSTORE_PATH") != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")/s' "$KTS"
+  grep -q 'getByName("release")' "$KTS" || echo "[주의] $KTS 에 출시 서명 설정을 넣지 못했어요"
+fi
 # namespace를 바꿨으니 MainActivity도 같은 패키지로 옮긴다 (manifest의 ".MainActivity"가 namespace 기준)
 MAIN=$(find android/app/src/main -name 'MainActivity.kt' -o -name 'MainActivity.java' 2>/dev/null | head -1)
 if [ -n "$MAIN" ]; then

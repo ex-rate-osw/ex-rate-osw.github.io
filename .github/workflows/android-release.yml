@@ -1,0 +1,94 @@
+name: Android 빌드 (Play 스토어용 AAB)
+
+# Google Play에 올릴 .aab 파일을 만든다. Actions 탭 → "Android 빌드 (Play 스토어용 AAB)" → Run workflow.
+# 끝나면 실행 화면 아래 Artifacts의 "android-aab"를 내려받아 Play Console에 올린다.
+#
+# 필요한 저장소 Secrets (Settings → Secrets and variables → Actions)
+#   ANDROID_KEYSTORE_BASE64    업로드 키(upload-keystore.jks)를 base64로 바꾼 값
+#   ANDROID_KEYSTORE_PASSWORD  키스토어 비밀번호
+#   ANDROID_KEY_ALIAS          키 별칭 (예: upload)
+#   ANDROID_KEY_PASSWORD       키 비밀번호 (키스토어 비밀번호와 같게 만들었으면 같은 값)
+# Secrets가 없으면 디버그 키로 서명한 확인용 파일만 만든다 (Play에는 못 올림).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 플랫폼 폴더 생성·설정 (패키지명, 이름, 아이콘, 서명)
+        run: bash setup_platforms.sh
+
+      - name: 테스트
+        run: flutter test
+
+      - name: 업로드 키 준비
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "::warning title=업로드 키 없음::ANDROID_KEYSTORE_BASE64 Secret이 없어 디버그 키로 서명해요. 이 파일은 Play Console에 올릴 수 없어요."
+            exit 0
+          fi
+          missing=""
+          [ -n "$KS_PASS" ] || missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || missing="$missing ANDROID_KEY_ALIAS"
+          if [ -n "$missing" ]; then echo "::error title=Secrets 부족::$missing"; exit 1; fi
+          ks="$RUNNER_TEMP/upload-keystore.jks"
+          printf '%s' "$KS_B64" | tr -d '\r\n ' | base64 -d > "$ks"
+          if ! keytool -list -keystore "$ks" -storepass "$KS_PASS" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error title=업로드 키 확인 실패::키스토어를 열지 못했어요. base64 값, 비밀번호, 별칭을 확인해 주세요."
+            exit 1
+          fi
+          {
+            echo "ANDROID_KEYSTORE_PATH=$ks"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KS_PASS"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=${KEY_PASS:-$KS_PASS}"
+          } >> "$GITHUB_ENV"
+          echo "::notice title=업로드 키::업로드 키로 서명해요 ($KEY_ALIAS)"
+
+      - name: AAB 빌드
+        run: |
+          set -o pipefail
+          if ! flutter build appbundle --release --build-number=${{ github.run_number }} 2>&1 | tee "$RUNNER_TEMP/build.log"; then
+            msg=$(grep -iE "error|failed|exception" "$RUNNER_TEMP/build.log" | tail -15 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=AAB 빌드 실패::$msg"
+            exit 1
+          fi
+          sdk=$(grep -rhoE "targetSdk(Version)?\s*(:|=)\s*[0-9]+|val targetSdkVersion: Int = [0-9]+" "$FLUTTER_ROOT/packages/flutter_tools/gradle" 2>/dev/null | grep -oE "[0-9]+$" | head -1)
+          ver=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          echo "::notice title=AAB 완료::버전 $ver (버전 코드 ${{ github.run_number }}), targetSdk ${sdk:-확인 못 함}, $(flutter --version | head -1)"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: android-aab
+          path: app/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
