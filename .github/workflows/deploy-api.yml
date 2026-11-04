@@ -1,0 +1,66 @@
+name: API 배포 (api.ohsangplay.com/exrate)
+
+# server/ 가 바뀌어 main 에 올라오면 Cloudflare Workers 로 배포한다.
+# 필요한 저장소 Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+#   (한지붕 저장소에 넣은 것과 같은 값을 써도 돼요. 토큰 권한: Workers Scripts 편집, ohsangplay.com 영역의 Workers Routes 편집)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: 배포
+        run: |
+          set -o pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error title=Secrets 없음::저장소 Secrets에 CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID 를 넣어주세요."
+            exit 1
+          fi
+          if ! npx --yes wrangler@4 deploy 2>&1 | tee deploy.log; then
+            msg=$(grep -iE "error|✘|failed" deploy.log | tail -10 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=배포 실패::$msg"
+            exit 1
+          fi
+
+      - name: 배포 후 확인
+        run: |
+          BASE=https://api.ohsangplay.com/exrate
+          fail=0
+          check() { if [ "$2" = yes ]; then echo "✓ $1"; else echo "::error title=확인 실패::$1"; fail=1; fi; }
+          for i in $(seq 1 20); do [ "$(curl -s "$BASE/health")" = '{"ok":true}' ] && break; sleep 3; done
+          [ "$(curl -s "$BASE/health")" = '{"ok":true}' ] && r=yes || r=no
+          check "$BASE/health 헬스체크" $r
+          head=$(curl -s "$BASE/daily.csv?t=$(date +%s)" | head -1)
+          [ "${head%%,*}" = date ] && r=yes || r=no
+          check "$BASE/daily.csv 환율 데이터 (첫 줄: $head)" $r
+          [ "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H 'Accept: text/html' "$BASE")" = "302 https://ex-rate.ohsangplay.com/" ] && r=yes || r=no
+          check "브라우저로 $BASE 접속 → 웹사이트로 이동" $r
+          rows=$(curl -s "$BASE/daily.csv" | wc -l)
+          [ "$fail" = 0 ] && echo "::notice title=API 배포 완료::$BASE/daily.csv ($rows줄)"
+          exit $fail

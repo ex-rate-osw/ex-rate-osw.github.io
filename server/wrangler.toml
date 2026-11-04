@@ -1,0 +1,11 @@
+name = "exrate-api"
+main = "worker.js"
+compatibility_date = "2025-10-01"
+# workers.dev 주소는 쓰지 않고 api.ohsangplay.com 경로로만 연결
+workers_dev = false
+
+# 운영 주소: https://api.ohsangplay.com/exrate/...  (한지붕 서버의 /onehouse/* 와 같은 api 서브도메인을 경로로 나눠 씀)
+routes = [
+  { pattern = "api.ohsangplay.com/exrate", zone_name = "ohsangplay.com" },
+  { pattern = "api.ohsangplay.com/exrate/*", zone_name = "ohsangplay.com" },
+]
